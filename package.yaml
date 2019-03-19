@@ -21,28 +21,29 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- array
 
-library:
-  source-dirs: src
+# library:
+#   source-dirs: src
 
 executables:
   quartzlang-exe:
-    main:                Main.hs
-    source-dirs:         app
+    main:                Quartz/Syntax/TestQuartz.hs
+    source-dirs:         src/ # TODO make app
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    dependencies:
-    - quartzlang
+    # dependencies:
+    # - quartzlang
 
-tests:
-  quartzlang-test:
-    main:                Spec.hs
-    source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - quartzlang
+# tests:
+#   quartzlang-test:
+#     main:                Spec.hs
+#     source-dirs:         test
+#     ghc-options:
+#     - -threaded
+#     - -rtsopts
+#     - -with-rtsopts=-N
+#     dependencies:
+#     - quartzlang
