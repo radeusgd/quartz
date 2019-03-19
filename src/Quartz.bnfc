@@ -1,22 +1,24 @@
 comment "//" ;
 comment "/*" "*/" ;
 
+position token QIdent (letter (letter | digit | '_')*) ;
+
 Prog. Program ::= [Declaration] ;
 
-Func. Declaration ::= "fun" Ident "(" [Arg] ")" ":" Type "=" Exp ;
--- FuncDefault. Declaration ::= "fun" Ident "(" [Arg] ")" "=" Exp ;
-Argument. Arg ::= Ident ":" Type ;
-ArgumentWithDefault. Arg ::= Ident ":" Type "=" Exp ;
+Func. Declaration ::= "fun" QIdent "(" [Arg] ")" ":" Type "=" Exp ;
+-- FuncDefault. Declaration ::= "fun" QIdent "(" [Arg] ")" "=" Exp ;
+Argument. Arg ::= QIdent ":" Type ;
+ArgumentWithDefault. Arg ::= QIdent ":" Type "=" Exp ;
 
 terminator Declaration "" ;
 separator  Arg "," ;
 
-Atom. Type ::= Ident ;
+Atom. Type ::= QIdent ;
 Abstraction. Type ::= Type "->" Type ;
 -- TODO complex types, typeclasses
 
 EApp. Exp3 ::= Exp Exp ;
-EVar. Exp4 ::= Ident ;
+EVar. Exp4 ::= QIdent ;
 EStr. Exp4 ::= String ;
 EInt. Exp4 ::= Integer ;
 EDouble. Exp4 ::= Double ;
