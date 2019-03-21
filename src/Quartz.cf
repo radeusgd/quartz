@@ -1,0 +1,37 @@
+comment "//" ;
+comment "/*" "*/" ;
+
+position token QIdent (letter (letter | digit | '_')*) ;
+token CustomOperator ('>' | '<' | '=')+ ;
+
+Prog. Program ::= [Declaration] ;
+
+Func. Declaration ::= "def" QIdent "(" [Arg] ")" ":" Type "=" Exp ;
+-- FuncDefault. Declaration ::= "def" QIdent "(" [Arg] ")" "=" Exp ;
+Operator. Declaration ::= "defop" CustomOperator "(" Arg "," Arg ")" ":" Type "=" Exp ;
+Argument. Arg ::= QIdent ":" Type ;
+ArgumentWithDefault. Arg ::= QIdent ":" Type "=" Exp ;
+
+terminator Declaration "" ;
+separator  Arg "," ;
+
+Atom. Type2 ::= QIdent ;
+Abstraction. Type ::= Type "->" Type2 ;
+
+coercions Type 2 ;
+-- TODO complex types, typeclasses
+
+
+EApp. Exp ::= Exp Exp2 ;
+ECustomOp. Exp1 ::= Exp1 CustomOperator Exp2 ;
+EAdd. Exp2 ::= Exp2 "+" Exp3 ;
+ESub. Exp2 ::= Exp2 "-" Exp3 ;
+EMul. Exp3 ::= Exp3 "*" Exp4 ;
+EDiv. Exp3 ::= Exp3 "/" Exp4 ;
+EVar. Exp4 ::= QIdent ;
+EStr. Exp4 ::= String ;
+EInt. Exp4 ::= Integer ;
+EDouble. Exp4 ::= Double ;
+EUndefined. Exp4 ::= "???" ;
+
+coercions Exp 4 ;

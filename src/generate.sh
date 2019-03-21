@@ -1,8 +1,8 @@
 #!/bin/bash
 set -xe
-bnfc Quartz.bnfc -p Quartz.Syntax
+bnfc -p Quartz.Syntax Quartz.cf
 cd Quartz/Syntax/
 alex LexQuartz.x
-happy ParQuartz.y
+happy -i ParQuartz.y
 rm LexQuartz.x
 rm ParQuartz.y
