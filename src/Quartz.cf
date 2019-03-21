@@ -16,7 +16,7 @@ terminator Declaration "" ;
 separator  Arg "," ;
 
 Atom. Type2 ::= QIdent ;
-Abstraction. Type ::= Type "->" Type2 ;
+Abstraction. Type ::= Type2 "->" Type ;
 
 coercions Type 2 ;
 -- TODO complex types, typeclasses
