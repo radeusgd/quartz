@@ -13,7 +13,7 @@ data Declaration = Function Ident [Arg] Type Exp deriving Show
 -- type of functions is the type of the whole function in contrast to just return type that was the case in Abstract Syntax
 -- TODO values may be 0-arg functions, but evaluation should be lazy then
 
-data Arg = Argument Ident -- TODO default values are discarded for now
+newtype Arg = Argument Ident -- TODO default values are discarded for now
   deriving Show
 
 data Exp
@@ -44,4 +44,5 @@ instance Pretty Exp where
   pretty (EApplication a b) = parens (pretty a <+> pretty b)
   pretty (EVar v) = pretty v
   pretty (EConst v) = pretty v
-  pretty (EBlock decls exp) = braces (prettyList decls <+> pretty exp)
+  pretty (EBlock decls exp) =
+    braces $ nest 4 (line <> vsep (map pretty decls) <> line <> pretty exp <> line)

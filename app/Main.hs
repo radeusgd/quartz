@@ -13,6 +13,7 @@ import Quartz.Syntax.AbsQuartz
 import Quartz.Syntax.ErrM
 
 import Passes.Desugar
+import Passes.TypeCheck
 import Data.Text.Prettyprint.Doc as Pretty
 import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
@@ -26,6 +27,10 @@ showDeclaration decl
       let raw = desugarDeclaration decl
       putStrLn "[Raw]"
       PrettyText.putDoc $ Pretty.pretty raw
+      putStrLn ""
+      let embedded = embedDeclaration raw
+      putStrLn "[Not unified]"
+      PrettyText.putDoc $ Pretty.pretty embedded
       putStrLn ""
 
 run :: ParseFun Program -> String -> IO ()
