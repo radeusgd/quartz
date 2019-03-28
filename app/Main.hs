@@ -12,18 +12,26 @@ import Quartz.Syntax.AbsQuartz
 
 import Quartz.Syntax.ErrM
 
+import Passes.AbstractToRaw as AbstractToRaw
+import Data.Text.Prettyprint.Doc as Pretty
+import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
+
 type ParseFun a = [Token] -> Err a
 
-showTree :: (Show a, Print a) => a -> IO ()
-showTree tree
+showDeclaration :: Declaration -> IO ()
+showDeclaration decl
  = do
-      putStrLn $ "\n[AST]\n\n" ++ show tree
-      putStrLn $ "\n[Linearized]\n\n" ++ printTree tree
+      putStrLn $ "[AST]\n\n" ++ show decl
+      putStrLn $ "[Linearized]\n" ++ printTree decl
+      let raw = AbstractToRaw.convertDeclaration decl
+      putStrLn "[Raw]"
+      PrettyText.putDoc $ Pretty.pretty raw
+      putStrLn ""
 
 run :: ParseFun Program -> String -> IO ()
 run parse str = let toks = myLexer str in case parse toks of
   Bad s -> putStrLn s >> exitFailure
-  Ok (Prog defs) -> mapM_ showTree defs >> exitSuccess
+  Ok (Prog defs) -> mapM_ showDeclaration defs >> exitSuccess
 
 main :: IO ()
 main = do
