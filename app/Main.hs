@@ -14,6 +14,8 @@ import Quartz.Syntax.ErrM
 
 import Passes.Desugar
 import Passes.EmbedTypes
+
+import Builtins
 import Passes.TypeCheck
 import Data.Text.Prettyprint.Doc as Pretty
 import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
@@ -33,7 +35,7 @@ showDeclaration decl
       putStrLn "[Not unified]"
       PrettyText.putDoc $ Pretty.pretty embedded
       putStrLn ""
-      let unified = checkDeclaration embedded
+      let unified = checkDeclaration initialEnv embedded
       case unified of
         Left err -> putStrLn "Unification error" >> print err
         Right unified -> do

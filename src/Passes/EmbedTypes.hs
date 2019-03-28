@@ -60,4 +60,4 @@ embedExp (D.EConst v) = do
 embedExp (D.EBlock decls exp) = do
   decls' <- mapM embedDeclaration' decls
   exp' <- embedExp exp
-  return $ T.EBlock (typeOfE exp') decls' exp'
+  return $ T.EBlock decls' exp'
