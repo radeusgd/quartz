@@ -12,7 +12,7 @@ import Quartz.Syntax.AbsQuartz
 
 import Quartz.Syntax.ErrM
 
-import Passes.AbstractToRaw as AbstractToRaw
+import Passes.Desugar
 import Data.Text.Prettyprint.Doc as Pretty
 import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
@@ -23,7 +23,7 @@ showDeclaration decl
  = do
       putStrLn $ "[AST]\n\n" ++ show decl
       putStrLn $ "[Linearized]\n" ++ printTree decl
-      let raw = AbstractToRaw.convertDeclaration decl
+      let raw = desugarDeclaration decl
       putStrLn "[Raw]"
       PrettyText.putDoc $ Pretty.pretty raw
       putStrLn ""

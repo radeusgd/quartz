@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module AST.RawAST where
+module AST.Desugared where
 
 import Data.Text.Prettyprint.Doc
 
