@@ -1,0 +1,5 @@
+def block(a: Int, b: Int): Int = {
+    val c: Int = a + b;
+    def go(x: Int): Int = c * x;
+    go a
+};
