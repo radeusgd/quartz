@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-module AST.Typed where
+module AST.Typed(module AST.Typed, Ident) where
 
 import Data.Text.Prettyprint.Doc
 import AST.Desugared(Ident, Value)
 
 data Type = Atom Ident | Abstraction Type Type | FreeParameter Integer
+  deriving Eq
 
 data Exp
   = EApplication Type Exp Exp
@@ -12,12 +13,18 @@ data Exp
   | EConst Type Value
   | EBlock Type [Declaration] Exp
 
+typeOfE :: Exp -> Type
+typeOfE (EApplication t _ _) = t
+typeOfE (EVar t _) = t
+typeOfE (EConst t _) = t
+typeOfE (EBlock t _ _) = t
+
 data Declaration =
   Function Type Ident [Ident] Exp
 
 instance Pretty Type where
   pretty (Atom ident) = pretty ident
-  pretty (Abstraction a b) = (pretty a) <+> "->" <+> (pretty b)
+  pretty (Abstraction a b) = parens $ (pretty a) <+> "->" <+> (pretty b)
   pretty (FreeParameter i) = pretty ("'" ++ show i)
 
 instance Pretty Declaration where

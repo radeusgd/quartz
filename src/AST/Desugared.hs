@@ -31,7 +31,7 @@ instance Pretty Value where
 
 instance Pretty Type where
   pretty (Atom ident) = pretty ident
-  pretty (Abstraction a b) = (pretty a) <+> "->" <+> (pretty b)
+  pretty (Abstraction a b) = parens $ (pretty a) <+> "->" <+> (pretty b)
   pretty (Unbound i) = pretty ("?t" ++ show i ++ "?")
 
 instance Pretty Arg where

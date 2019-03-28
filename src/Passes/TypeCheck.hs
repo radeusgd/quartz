@@ -1,69 +1,52 @@
 module Passes.TypeCheck(
-  embedDeclaration
-                       ) where
+  checkDeclaration
+  ) where
 
-import Control.Monad.State
-import Control.Monad.Identity
+import Control.Monad.Reader
+import Control.Monad.Except
+import Data.Map as M
 
-import AST.Desugared as D
-import AST.Typed as T
+import AST.Typed
 
+data TypeError = Other String deriving Show
 
-type WithFreeParams = StateT Integer Identity
+type Env = Map Ident Type
 
-getFreeParam :: WithFreeParams Integer
-getFreeParam = do
-  p <- get
-  modify (+1)
-  return p
+type Check = ReaderT Env (Either TypeError)
 
-getFreshType :: WithFreeParams T.Type
-getFreshType = getFreeParam >>= return . T.FreeParameter
+checkDeclaration :: Declaration -> Either TypeError Declaration
+checkDeclaration decl = runReaderT (checkDeclaration' decl) empty
 
-typeOfV :: Value -> WithFreeParams T.Type
-typeOfV (VStr _) = return $ T.Atom "String"
-typeOfV (VInt _) = return $ T.Atom "Int"
-typeOfV (VDouble _) = return $ T.Atom "Double"
-typeOfV VUndefined = getFreshType
+-- takes away n args from the type and returns the rest (return type of n-arg function)
+extractArgs :: Int -> Type -> Either TypeError ([Type], Type)
+extractArgs 0 t = return ([], t)
+extractArgs n t | n > 0 = case t of
+                    Abstraction a b -> do
+                      (rest, ret) <- extractArgs (n - 1) b
+                      return (a : rest, ret)
+                    _ -> throwError $ Other "Internal error: function type has less arguments than its arity, shouldn't ever happen"
 
-typeOfE :: T.Exp -> T.Type
-typeOfE (T.EApplication t _ _) = t
-typeOfE (T.EVar t _) = t
-typeOfE (T.EConst t _) = t
-typeOfE (T.EBlock t _ _) = t
+introduceArgs :: [(Ident, Type)] -> Env -> Env
+introduceArgs [] e = e
+introduceArgs ((name, ttype):tail) e = introduceArgs tail (insert name ttype e)
 
-embedDeclaration :: D.Declaration -> T.Declaration
-embedDeclaration decl =
-  runIdentity $ evalStateT (embedDeclaration' decl) 0
+unify :: Type -> Type -> Check Type
+unify a b = if a == b then return a
+            else throwError $ Other "Simple unification failed, TODO"
 
-embedDeclaration' :: D.Declaration -> WithFreeParams T.Declaration
-embedDeclaration' (D.Function name args ttype exp) = do
-  type' <- embedType ttype
-  let args' = map embedArg args
-  exp' <- embedExp exp
-  return $ T.Function type' name args' exp'
-  where
-    embedArg :: D.Arg -> Ident
-    embedArg (Argument i) = i
+unifyDeclared :: Type -> Type -> Check Type
+unifyDeclared decl inner = do
+  u <- unify decl inner
+  if u /= decl then throwError $ Other "TODO: declared type is too general"
+  else return u
 
-embedType :: D.Type -> WithFreeParams T.Type
-embedType (D.Atom i) = return $ T.Atom i
-embedType (D.Abstraction a b) = liftM2 T.Abstraction (embedType a) (embedType b)
-embedType (D.Unbound _) = getFreshType -- TODO not sure if just discarding these is a good idea, but may work
+checkDeclaration' :: Declaration -> Check Declaration
+checkDeclaration' (Function ttype name args exp) = do
+  (argtypes, returntype) <- lift $ extractArgs (length args) ttype
+  exp' <- local (introduceArgs $ zip args argtypes) (checkExpression exp)
+  let exptype = typeOfE exp'
+  u <- unifyDeclared returntype exptype
+  return $ Function u name args exp'
 
-embedExp :: D.Exp -> WithFreeParams T.Exp
-embedExp (D.EApplication a b) = do
-  a' <- embedExp a
-  b' <- embedExp b
-  t <- getFreshType
-  return $ T.EApplication t a' b'
-embedExp (D.EVar i) = do
-  t <- getFreshType
-  return $ T.EVar t i
-embedExp (D.EConst v) = do
-  t <- typeOfV v
-  return $ T.EConst t v
-embedExp (D.EBlock decls exp) = do
-  decls' <- mapM embedDeclaration' decls
-  exp' <- embedExp exp
-  return $ T.EBlock (typeOfE exp') decls' exp'
+checkExpression :: Exp -> Check Exp
+checkExpression e = throwError $ Other "TODO exp"
