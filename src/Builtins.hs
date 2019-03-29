@@ -19,7 +19,7 @@ initialEnv :: Env
 initialEnv = fromList [
   -- TODO actually plus should be polymorphic... but for now let's skip this
   ("+", makeType (Abs int (Abs int int))),
-  ("><", makeType (Abs str (Abs str str))),
+  ("<+>", makeType (Abs str (Abs str str))),
   ("*", makeType (Abs int (Abs int int))),
   ("if_then_else", makeType (Abs bool (Abs bool (Abs bool bool)))) -- it's crucial to get polymorphic ifte Bool -> a -> a -> a
                       ]
