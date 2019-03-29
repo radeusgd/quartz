@@ -2,7 +2,7 @@ comment "//" ;
 comment "/*" "*/" ;
 
 position token QIdent (letter (letter | digit | '_')*) ;
-token CustomOperator ('>' | '<' | '=')+ ;
+token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' | '!' | '+' | '*' | '/' | '-') ;
 
 Prog. Program ::= [Declaration] ;
 
@@ -34,6 +34,8 @@ EVar. Exp4 ::= QIdent ;
 EStr. Exp4 ::= String ;
 EInt. Exp4 ::= Integer ;
 EDouble. Exp4 ::= Double ;
+ETrue. Exp4 ::= "true" ;
+EFalse. Exp4 ::= "false" ;
 EUndefined. Exp4 ::= "???" ;
 EBlock. Exp4 ::= "{" [Declaration] Exp "}" ;
 

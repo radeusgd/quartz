@@ -31,6 +31,8 @@ desugarExpression (A.EVar (QIdent (_, v))) = D.EVar v
 desugarExpression (A.EStr s) = D.EConst $ VStr s
 desugarExpression (A.EInt i) = D.EConst $ VInt i
 desugarExpression (A.EDouble d) = D.EConst $ VDouble d
+desugarExpression A.ETrue = D.EConst $ VBool True
+desugarExpression A.EFalse = D.EConst $ VBool False
 desugarExpression (A.EUndefined) = D.EVar "undefined" -- TODO not sure if that's how I want this?
 desugarExpression (A.EBlock decls e) =
   D.EBlock (map desugarDeclaration decls) (desugarExpression e)

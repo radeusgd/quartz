@@ -1,3 +1,9 @@
 def a(): Int = 10;
 
 def dec(a: Int, b: Int): Int = 10 * a + b; // test
+
+/*
+aaa
+*/
+
+def not(x: Bool): Bool = if x then false else true;

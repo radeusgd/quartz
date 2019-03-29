@@ -5,7 +5,7 @@ import Data.Text.Prettyprint.Doc
 
 type Ident = String
 
-data Value = VStr String | VInt Integer | VDouble Double | VUndefined deriving Show
+data Value = VStr String | VInt Integer | VDouble Double | VBool Bool | VUndefined deriving Show
 
 data Type = Atom Ident | Abstraction Type Type | Unbound Integer deriving Show
 
@@ -24,9 +24,11 @@ data Exp
   deriving Show
 
 instance Pretty Value where
-  pretty (VStr s) = pretty s
+  pretty (VStr s) = "\"" <> pretty s <> "\""
   pretty (VInt i) = pretty i
   pretty (VDouble d) = pretty d
+  pretty (VBool True) = "true"
+  pretty (VBool False) = "false"
   pretty VUndefined = "???"
 
 instance Pretty Type where

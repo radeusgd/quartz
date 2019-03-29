@@ -45,6 +45,7 @@ extractArgs n t | n > 0 = case t of
                       (rest, ret) <- extractArgs (n - 1) b
                       return (a : rest, ret)
                     _ -> throwError $ Other "Internal error: function type has less arguments than its arity, shouldn't ever happen"
+extractArgs _ _ = throwError $ Other "Internal error: extract args called with negative arguments, shouldn't ever happen"
 
 introduceArgs :: [(Ident, Type)] -> Env -> Env
 introduceArgs [] e = e

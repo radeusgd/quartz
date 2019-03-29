@@ -56,3 +56,4 @@ main = do
     [fname] -> do
       fd <- openFile fname ReadMode
       hGetContents fd >>= run pProgram
+    _ -> putStrLn "too many args"

@@ -32,7 +32,7 @@
             ;; generate regex string for each category of keywords
             (x-keywords-regexp (regexp-opt x-keywords 'words))
             ;; (x-types-regexp "\\<[A-Z]\\w*\\>")
-            (x-constants-regexp "\\d+")
+            (x-constants-regexp "\\d+|true|false")
             (x-values-regexp "\\<[A-Za-z][A-Za-z0-9]*\\>")
             )
         `(
@@ -47,7 +47,7 @@
           )))
 
 ;;;###autoload
-(define-derived-mode quartz-mode python-mode "Quartz"
+(define-derived-mode quartz-mode java-mode "Quartz"
   "Major mode for editing Quartz"
 
   ;; code for syntax highlighting

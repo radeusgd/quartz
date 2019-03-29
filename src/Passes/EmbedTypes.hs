@@ -24,6 +24,7 @@ typeOfV :: Value -> WithFreeParams T.Type
 typeOfV (VStr _) = return $ T.Atom "String"
 typeOfV (VInt _) = return $ T.Atom "Int"
 typeOfV (VDouble _) = return $ T.Atom "Double"
+typeOfV (VBool _) = return $ T.Atom "Bool"
 typeOfV VUndefined = getFreshType
 
 embedDeclaration :: D.Declaration -> T.Declaration
