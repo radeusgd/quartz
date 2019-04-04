@@ -1,4 +1,4 @@
-module Builtins(builtins, Builtin, makeTypeEnv, runWithBuiltins) where
+module Builtins(builtins, Builtin, makeTypeEnv, runWithBuiltins, register) where
 
 import qualified Data.Map as M
 import AST.Typed
@@ -37,17 +37,13 @@ make3ArgFun f = VFunction "z" emptyEnv $ do
 
 builtins :: [(String, Builtin)]
 builtins = [
+  -- TODO actually plus should be polymorphic... but for now let's skip this
   ("+", Builtin (makeSimpleType [int, int, int]) (makeTwoArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x + y)),
   ("*", Builtin (makeSimpleType [int, int, int]) (makeTwoArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x * y)),
-  ("if_then_else", Builtin (makeType (Abs bool (Abs bool (Abs bool bool)))) (make3ArgFun $ \(VBool x) -> \tt -> \ff -> if x then tt else ff))
+  ("if_then_else", Builtin (makeType (Abs bool (Abs bool (Abs bool bool)))) (make3ArgFun $ \(VBool x) -> \tt -> \ff -> if x then tt else ff)),
+  ("<+>", Builtin (makeType (Abs str (Abs str str))) (makeTwoArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b))
            ]
 
--- TODO this will be more complex, but a stub to test typechecking
-  -- TODO actually plus should be polymorphic... but for now let's skip this
-  -- ("+", makeType (Abs int (Abs int int))),
-  -- ("<+>", makeType (Abs str (Abs str str))),
-  -- ("*", makeType (Abs int (Abs int int))),
-  -- ("if_then_else", ) -- it's crucial to get polymorphic ifte Bool -> a -> a -> a
 
 makeTypeEnv :: [(String, Builtin)] -> Env
 makeTypeEnv = foldl register M.empty where
@@ -59,9 +55,9 @@ runWithBuiltins :: [(String, Builtin)] -> I.Interpreter a -> Either I.ErrorType 
 runWithBuiltins builtins i = I.runInterpreter $ do
   env <- foldM register I.emptyEnv builtins
   local (\_ -> env) i
-  where
-    register :: I.Env -> (String, Builtin) -> I.Interpreter I.Env
-    register env (name, Builtin _ v) = do
-      loc <- I.alloc
-      I.setValue loc v
-      return $ I.bind name loc env
+
+register :: I.Env -> (String, Builtin) -> I.Interpreter I.Env
+register env (name, Builtin _ v) = do
+  loc <- I.alloc
+  I.setValue loc v
+  return $ I.bind name loc env

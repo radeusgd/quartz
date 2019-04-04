@@ -1,5 +1,6 @@
 module Passes.TypeCheck(
   checkDeclaration,
+  checkExpression,
   Env,
   TypeError(..)
   ) where
@@ -38,6 +39,9 @@ traceEnv = do
 
 checkDeclaration :: Env -> Declaration -> Either TypeError Declaration
 checkDeclaration env decl = runReaderT (checkDeclaration' decl) env
+
+checkExpression :: Env -> Exp -> Either TypeError Exp
+checkExpression env exp = runReaderT (checkExpression' exp) env
 
 -- takes away n args from the type and returns the rest (return type of n-arg function)
 extractArgs :: Int -> Type -> Either TypeError ([Type], Type)
@@ -84,7 +88,7 @@ reconstructFunctionType (h:t) ret = Abstraction h (reconstructFunctionType t ret
 checkDeclaration' :: Declaration -> Check Declaration
 checkDeclaration' (Function ttype name args exp) = do
   (argtypes, returntype) <- lift $ extractArgs (length args) ttype
-  exp' <- local (introduceArgs $ zip args argtypes) (checkExpression exp)
+  exp' <- local (introduceArgs $ zip args argtypes) (checkExpression' exp)
   let exptype = typeOfE exp'
   u <- unifyDeclared returntype exptype
   let ftype = reconstructFunctionType argtypes u
@@ -97,28 +101,28 @@ readVar v = do
     Just t -> return t
     Nothing -> throwError $ UnboundVariable v
 
-checkExpression :: Exp -> Check Exp
-checkExpression c@(EConst _ _) = return c -- consts always have known type
-checkExpression (EVar t v) = do
+checkExpression' :: Exp -> Check Exp
+checkExpression' c@(EConst _ _) = return c -- consts always have known type
+checkExpression' (EVar t v) = do
   vt <- readVar v
   u <- unify t vt
   return $ EVar u v
-checkExpression (EApplication t a b) = do
-  a' <- checkExpression a
-  b' <- checkExpression b
+checkExpression' (EApplication t a b) = do
+  a' <- checkExpression' a
+  b' <- checkExpression' b
   case typeOfE a' of
     (Abstraction x y) -> do
       _ <- unify (typeOfE b') x -- check if arguments match
       return $ EApplication y a' b'
     atom@(Atom _) -> throwError $ TooFewArguments atom a' b'
     (FreeParameter _) -> throwError $ Other "TODO: fresh parameters in abstraction not implemented"
-checkExpression (EBlock decls exp) = do
+checkExpression' (EBlock decls exp) = do
   (decls', exp') <- checkBlock decls exp
   return $ EBlock decls' exp'
   where
     checkBlock :: [Declaration] -> Exp -> Check ([Declaration], Exp)
     checkBlock [] exp = do
-      exp' <- checkExpression exp
+      exp' <- checkExpression' exp
       return ([], exp')
     checkBlock (decl:t) exp = do
       d' <- checkDeclaration' decl

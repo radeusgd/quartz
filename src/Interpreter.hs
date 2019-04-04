@@ -132,3 +132,6 @@ withDeclared (h:t) i = do
   env <- ask
   env' <- processDefinition env h
   local (\_ -> env') $ withDeclared t i
+
+execInterpreter :: Env -> Memory -> Interpreter a -> Either ErrorType (a, Memory)
+execInterpreter env mem i = runIdentity $ runExceptT $ runStateT (runReaderT i env) mem

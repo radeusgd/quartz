@@ -7,13 +7,23 @@ token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' |
 Prog. Program ::= [Declaration] ;
 
 Func. Declaration ::= "def" QIdent "(" [Arg] ")" ":" Type "=" Exp ;
+GenericFunc. Declaration ::= "def" QIdent "[" [TypeQualifier] "]" "(" [Arg] ")" ":" Type "=" Exp ;
 -- FuncDefault. Declaration ::= "def" QIdent "(" [Arg] ")" "=" Exp ;
 Operator. Declaration ::= "defop" CustomOperator "(" Arg "," Arg ")" ":" Type "=" Exp ;
 Value. Declaration ::= "val" QIdent ":" Type "=" Exp ;
+ValueInferred. Declaration ::= "val" QIdent "=" Exp ;
 Import. Declaration ::= "import" Ident ;
+Data. Declaration ::= "data" QIdent "=" [DataCase] ; -- TODO type polymorphism
+
+DataCase. DataCase ::= QIdent [Type] ;
+separator Type "" ;
+separator nonempty DataCase "|" ;
 
 Argument. Arg ::= QIdent ":" Type ;
 ArgumentWithDefault. Arg ::= QIdent ":" Type "=" Exp ;
+
+FreeTypeVariable. TypeQualifier ::= QIdent ;
+separator TypeQualifier "," ;
 
 terminator Declaration ";" ;
 separator  Arg "," ;

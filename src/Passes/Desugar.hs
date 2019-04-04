@@ -49,7 +49,7 @@ buildApplicationType args rettype = go (reverse args) rettype where
   go (h:t) rettype = go t (D.Abstraction h rettype) -- we first apply the innermost abstraction, that is the last argument
 
 desugarDeclaration :: A.Declaration -> D.Declaration
-desugarDeclaration (A.Func (QIdent (_, f)) args rettype exp) =
+desugarDeclaration (A.Func (QIdent (_, f)) args rettype exp) = -- TODO polymorphism
   D.Function f args' type' exp' where
   args' = map desugarArgs args
   type' = buildApplicationType (map argType args) $ desugarType rettype
