@@ -1,8 +1,8 @@
-//data MaybeI = Some int | None;
+data MaybeI = Some Int | None;
 
-def getOrElse [a](m: MaybeI, default: int): int = case m of {
+def getOrElse [a](m: MaybeI, default: Int): Int = case m of {
     | Some x -> x
     | None -> default
 };
 
-def main(): int = getOrElse (Some 4) 0;
+def main(): Int = getOrElse (Some 4) 0;

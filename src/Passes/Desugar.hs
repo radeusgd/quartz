@@ -4,6 +4,7 @@ module Passes.Desugar(
   desugarDeclaration,
                     ) where
 
+import Data.Maybe
 import Quartz.Syntax.AbsQuartz as A
 import AST.Desugared as D
 
@@ -49,10 +50,27 @@ buildApplicationType args rettype = go (reverse args) rettype where
   go (h:t) rettype = go t (D.Abstraction h rettype) -- we first apply the innermost abstraction, that is the last argument
 
 desugarDeclaration :: A.Declaration -> D.Declaration
-desugarDeclaration (A.Func (QIdent (_, f)) args rettype exp) = -- TODO polymorphism
+desugarDeclaration (A.Func (QIdent (_, name)) args rettype exp) =
+  desugarFunction name [] args (Just rettype) exp
+desugarDeclaration (A.GenericFunc (QIdent (_, name)) qualifiers args rettype exp) =
+  desugarFunction name qualifiers args (Just rettype) exp
+desugarDeclaration (A.Operator (CustomOperator op) a1 a2 rettype exp) = -- TODO add Position to CustomOperator to get rid of this undefined
+  desugarFunction op [] [a1, a2] (Just rettype) exp
+desugarDeclaration (A.Value (QIdent (_, name)) rettype exp) = -- treat values as 0-arg functions
+  desugarFunction name [] [] (Just rettype) exp
+desugarDeclaration (A.ValueInferred (QIdent (_, name)) exp) = -- treat values as 0-arg functions
+  desugarFunction name [] [] Nothing exp
+desugarDeclaration (A.Import (Ident name)) = D.Import name
+desugarDeclaration (A.Data (QIdent (_, typename)) cases) = D.DataType typename (map desugarDataCase cases)
+  where
+    desugarDataCase (A.DataConstructor (QIdent (_, name)) types) = D.DataTypeCase name (map desugarType types)
+
+desugarFunction :: String -> [TypeQualifier] -> [A.Arg] -> Maybe A.Type -> A.Exp -> D.Declaration
+desugarFunction f qualifiedTypes args rettype exp = -- TODO polymorphism
   D.Function f args' type' exp' where
   args' = map desugarArgs args
-  type' = buildApplicationType (map argType args) $ desugarType rettype
+  rettype' = fromMaybe D.Unbound (desugarType <$> rettype)
+  type' = bindQualified qualifiedTypes $ buildApplicationType (map argType args) $ rettype'
   exp' = desugarExpression exp
   desugarArgs :: A.Arg -> D.Arg
   desugarArgs (A.Argument (QIdent (_, a)) _) = D.Argument a
@@ -60,7 +78,6 @@ desugarDeclaration (A.Func (QIdent (_, f)) args rettype exp) = -- TODO polymorph
   argType :: A.Arg -> D.Type
   argType (A.Argument _ t) = desugarType t
   argType (A.ArgumentWithDefault _ t _) = desugarType t
-desugarDeclaration (A.Operator (CustomOperator op) a1 a2 rettype exp) = -- TODO add Position to CustomOperator to get rid of this undefined
-  desugarDeclaration (A.Func (QIdent (undefined, op)) [a1, a2] rettype exp)
-desugarDeclaration (A.Value name rettype exp) = -- treat values as 0-arg functions
-  desugarDeclaration (A.Func name [] rettype exp)
+  bindQualified :: [TypeQualifier] -> D.Type -> D.Type
+  bindQualified [] t = t
+  bindQualified (FreeTypeVariable (QIdent (_, v)) : tail) t = ForAll v (bindQualified tail t)

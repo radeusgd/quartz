@@ -45,11 +45,13 @@ embedDeclaration' (D.Function name args ttype exp) = do
   where
     embedArg :: D.Arg -> Ident
     embedArg (Argument i) = i
+embedDeclaration' (D.Import name) = error "TODO"
+embedDeclaration' (D.DataType name cases) = error "TODO"
 
 embedType :: D.Type -> WithFreeParams T.Type
 embedType (D.Atom i) = return $ T.Atom i
 embedType (D.Abstraction a b) = liftM2 T.Abstraction (embedType a) (embedType b)
-embedType (D.Unbound _) = getFreshType -- TODO not sure if just discarding these is a good idea, but may work
+embedType D.Unbound = getFreshType
 
 embedExp' :: D.Exp -> WithFreeParams T.Exp
 embedExp' (D.EApplication a b) = do

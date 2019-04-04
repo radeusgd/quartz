@@ -15,7 +15,7 @@ ValueInferred. Declaration ::= "val" QIdent "=" Exp ;
 Import. Declaration ::= "import" Ident ;
 Data. Declaration ::= "data" QIdent "=" [DataCase] ; -- TODO type polymorphism
 
-DataCase. DataCase ::= QIdent [Type] ;
+DataConstructor. DataCase ::= QIdent [Type] ;
 separator Type "" ;
 separator nonempty DataCase "|" ;
 

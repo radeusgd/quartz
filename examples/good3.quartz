@@ -8,3 +8,5 @@ def block(a: Int, b: Int): Int = {
     def go(x: Int): Int = c * x;
     go a
 };
+
+def main(): Int = block 5 5; // should be 50

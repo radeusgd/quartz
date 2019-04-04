@@ -174,8 +174,11 @@ runDebug fname = do
   decls <- handleSyntaxError parsed
   putStrLn "[Linearized AST]"
   mapM_ (putStrLn . printTree) decls
-  let embedded = preprocess decls
-  putStrLn "\n[Preprocessed]"
+  let desugared = map desugarDeclaration decls
+  putStrLn "\n[Desugared]"
+  mapM_ prettyLine desugared
+  let embedded = map embedDeclaration desugared
+  putStrLn "\n[Embedded]"
   mapM_ prettyLine embedded
   typed <- typeCheck embedded
   putStrLn "\n[Typed]"
