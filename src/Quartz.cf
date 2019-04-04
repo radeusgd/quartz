@@ -10,6 +10,7 @@ Func. Declaration ::= "def" QIdent "(" [Arg] ")" ":" Type "=" Exp ;
 -- FuncDefault. Declaration ::= "def" QIdent "(" [Arg] ")" "=" Exp ;
 Operator. Declaration ::= "defop" CustomOperator "(" Arg "," Arg ")" ":" Type "=" Exp ;
 Value. Declaration ::= "val" QIdent ":" Type "=" Exp ;
+Import. Declaration ::= "import" Ident ;
 
 Argument. Arg ::= QIdent ":" Type ;
 ArgumentWithDefault. Arg ::= QIdent ":" Type "=" Exp ;
@@ -25,7 +26,9 @@ coercions Type 2 ;
 
 EApp. Exp ::= Exp Exp2 ;
 ECustomOp. Exp1 ::= Exp1 CustomOperator Exp2 ;
-EIfThenElse. Exp1 ::= "if" Exp2 "then" Exp2 "else" Exp2 ; 
+EIfThenElse. Exp1 ::= "if" Exp2 "then" Exp2 "else" Exp2 ;
+ELambda. Exp1 ::= "\\" Ident "->" Exp2 ;
+EMatch. Exp ::= "case" Exp "of" "{" [Case] "}" ;
 EAdd. Exp2 ::= Exp2 "+" Exp3 ;
 ESub. Exp2 ::= Exp2 "-" Exp3 ;
 EMul. Exp3 ::= Exp3 "*" Exp4 ;
@@ -40,3 +43,7 @@ EUndefined. Exp4 ::= "???" ;
 EBlock. Exp4 ::= "{" [Declaration] Exp "}" ;
 
 coercions Exp 4 ;
+
+Case. Case ::= "|" QIdent [QIdent] "->" Exp ;
+separator Case "" ;
+separator QIdent "" ;
