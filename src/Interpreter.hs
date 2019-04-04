@@ -93,15 +93,18 @@ processDefinition :: Env -> Declaration -> Interpreter Env
 processDefinition env (Function _ name args exp) = do
   loc <- alloc
   let env' = bind name loc env
-  val <- buildFunction args exp
+  val <- local (\_ -> env') $ buildFunction args exp
   setValue loc val
-  return env'
-  where
+  return env' where
     buildFunction :: [String] -> Exp -> Interpreter Value
     buildFunction [] e = interpret e
     -- TODO actually want to use env'
-    buildFunction [h] e = return $ VFunction h env (interpret e)
+    buildFunction [h] e =
+      do
+      env <- ask
+      return $ VFunction h env (interpret e)
     buildFunction (h:t) e = do
+      env <- ask
       return $ VFunction h env (buildFunction t e)
 
 interpret :: Exp -> Interpreter Value
@@ -119,7 +122,7 @@ interpret (EApplication _ fun arg) = do
       argloc <- alloc
       setValue argloc arg'
       let innerEnv = bind argname argloc funEnv
-      traceEnv innerEnv
+      -- traceEnv innerEnv
       local (\_ -> innerEnv) computation
     _ -> throwError "Trying to apply to a non-function (why didn't typechecker catch this?)"
 
