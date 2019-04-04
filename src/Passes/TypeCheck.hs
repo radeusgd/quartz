@@ -1,6 +1,7 @@
 module Passes.TypeCheck(
   checkDeclaration,
-  Env
+  Env,
+  TypeError(..)
   ) where
 
 import Control.Monad.Reader
@@ -16,6 +17,7 @@ data TypeError
   | TooGeneralDeclaration Type Type
   | TooFewArguments Type Exp Exp
   | TypeMismatch Type Type
+  | TopLevelTypeNotSpecified String
   | Other String
 
 instance Show TypeError where
