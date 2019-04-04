@@ -67,7 +67,19 @@ runRepl = do
            (Ok d, Bad _) -> runDecl d tenv env mem
         exitSuccess
     runDecl :: Abs.Declaration -> Passes.TypeCheck.Env -> Interpreter.Env -> Interpreter.Memory -> IO ()
-    runDecl decl tenv env mem = putStrLn "TODO" >> repl' tenv env mem
+    runDecl decl tenv env mem = do
+      let desugared = desugarDeclaration decl
+      let embedded = embedDeclaration desugared
+      case introduceTopLevelTypes [embedded] tenv of
+         Left err -> (putStrLn $ "Type error: " ++ show err) >> repl' tenv env mem
+         Right tenv' -> do
+            let typed = checkDeclaration tenv' embedded
+            case typed of
+              Left err -> (putStrLn $ "Type error: " ++ show err) >> repl' tenv env mem
+              Right def ->
+                case execInterpreter env mem (processDefinition env def) of
+                  Left err -> (putStrLn $ "Runtime error: " ++ show err) >> repl' tenv env mem
+                  Right (env', mem') -> putStrLn ("Defined: " ++ Typed.declarationName def) >> repl' tenv' env' mem'
     runExp :: Abs.Exp -> Passes.TypeCheck.Env -> Interpreter.Env -> Interpreter.Memory -> IO ()
     runExp exp tenv env mem = do
       let desugared = desugarExpression exp

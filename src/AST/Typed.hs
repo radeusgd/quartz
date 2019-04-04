@@ -23,6 +23,9 @@ typeOfE (EBlock _ e) = typeOfE e
 data Declaration =
   Function Type Ident [Ident] Exp
 
+declarationName :: Declaration -> String
+declarationName (Function _ name _ _) = name
+
 instance Pretty Type where
   pretty (Atom ident) = pretty ident
   pretty (Abstraction a b) = parens $ (pretty a) <+> "->" <+> (pretty b)

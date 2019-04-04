@@ -1,6 +1,7 @@
 module Passes.TypeCheck(
   checkDeclaration,
   checkExpression,
+  introduceDeclaration,
   Env,
   TypeError(..)
   ) where
