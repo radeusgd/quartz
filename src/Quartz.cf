@@ -59,7 +59,8 @@ EFalse. Exp4 ::= "false" ;
 EUndefined. Exp4 ::= "???" ;
 EUnit. Exp4 ::= "()" ;
 EBlock. Exp4 ::= "{" [Declaration] Exp "}" ;
-
+EList. Exp4 ::= "[" [Exp] "]" ;
+separator Exp "," ;
 coercions Exp 4 ;
 
 SimpleCase. Case ::= "|" QIdent [QIdent] "->" Exp ;

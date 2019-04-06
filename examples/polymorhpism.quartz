@@ -11,7 +11,11 @@ def length[a](l: List a): Int = case l of {
 
 def echo(): IO () = readLine >>= (\ line -> print line);
 
+val len: Int = length [1,2,3];
+
 def main(): IO () = do {
+    print (id (toString len));
+    echo;
     print "Line 1:";
     a <- readLine;
     print "Line 2:";

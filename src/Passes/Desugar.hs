@@ -41,6 +41,7 @@ desugarExpression A.EUnit = D.EVar "TODO"
 desugarExpression (A.EMatch e cases) = D.EVar "TODO"
 desugarExpression (A.ELambda (QIdent (_, v)) e) = D.ELambda v (desugarExpression e)
 desugarExpression (A.EDo clauses) = desugarDoNotation clauses
+desugarExpression (A.EList elems) = desugarList elems
 
 -- TODO the typing pass may need to use some Reader or State to keep track of fresh variables once we add better inference
 desugarType :: A.Type -> D.Type
@@ -104,3 +105,8 @@ desugarDoNotation (DoLet (QIdent (_, v)) e :t) =
     (D.EVar ">>=") (desugarExpression e))
    (D.ELambda v (desugarDoNotation t))
   )
+
+desugarList :: [A.Exp] -> D.Exp
+desugarList [] = D.EVar "Nil"
+desugarList (h:t) =
+  (D.EApplication (D.EApplication (D.EVar "Cons") (desugarExpression h)) (desugarList t))
