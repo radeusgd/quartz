@@ -6,10 +6,9 @@ token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' |
 
 Prog. Program ::= [Declaration] ;
 
-Func. Declaration ::= "def" QIdent "(" [Arg] ")" ":" Type "=" Exp ;
-GenericFunc. Declaration ::= "def" QIdent "[" [TypeQualifier] "]" "(" [Arg] ")" ":" Type "=" Exp ;
+Func. Declaration ::= "def" QIdent [TypeQualifier] "(" [Arg] ")" ":" Type "=" Exp ;
 -- FuncDefault. Declaration ::= "def" QIdent "(" [Arg] ")" "=" Exp ;
-Operator. Declaration ::= "defop" CustomOperator "(" Arg "," Arg ")" ":" Type "=" Exp ;
+Operator. Declaration ::= "defop" CustomOperator [TypeQualifier] "(" Arg "," Arg ")" ":" Type "=" Exp ;
 Value. Declaration ::= "val" QIdent ":" Type "=" Exp ;
 ValueInferred. Declaration ::= "val" QIdent "=" Exp ;
 Import. Declaration ::= "import" Ident ;
@@ -22,15 +21,21 @@ separator nonempty DataCase "|" ;
 Argument. Arg ::= QIdent ":" Type ;
 ArgumentWithDefault. Arg ::= QIdent ":" Type "=" Exp ;
 
-FreeTypeVariable. TypeQualifier ::= QIdent ;
-separator TypeQualifier "," ;
+FreeTypeVariable. TypeQualifier ::= "[" QIdent "]" ;
+-- RestrictedTypeVariable. TypeQualifier ::= "[" QIdent ":" [TypeBound] "]" ;
+separator TypeQualifier "" ;
+
+SimpleTypeBound. TypeBound ::= QIdent ;
+separator nonempty TypeBound "," ;
 
 terminator Declaration ";" ;
 separator  Arg "," ;
 
-Atom. Type2 ::= QIdent ;
+Atom. Type2 ::= QIdent;
+--UnitAtom. Type2 ::= "()" ;
 Abstraction. Type ::= Type2 "->" Type ;
-
+Constructor. Type ::= QIdent [Type2] ;
+separator nonempty Type2 "" ;
 coercions Type 2 ;
 -- TODO complex types, typeclasses
 
@@ -50,10 +55,11 @@ EDouble. Exp4 ::= Double ;
 ETrue. Exp4 ::= "true" ;
 EFalse. Exp4 ::= "false" ;
 EUndefined. Exp4 ::= "???" ;
+EUnit. Exp4 ::= "()" ;
 EBlock. Exp4 ::= "{" [Declaration] Exp "}" ;
 
 coercions Exp 4 ;
 
-Case. Case ::= "|" QIdent [QIdent] "->" Exp ;
+SimpleCase. Case ::= "|" QIdent [QIdent] "->" Exp ;
 separator Case "" ;
 separator QIdent "" ;
