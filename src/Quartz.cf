@@ -7,15 +7,16 @@ token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' |
 Prog. Program ::= [Declaration] ;
 
 Func. Declaration ::= "def" QIdent [TypeQualifier] "(" [Arg] ")" ":" Type "=" Exp ;
+ParameterlessFunc. Declaration ::= "def" QIdent [TypeQualifier] "()" ":" Type "=" Exp ;
 -- FuncDefault. Declaration ::= "def" QIdent "(" [Arg] ")" "=" Exp ;
 Operator. Declaration ::= "defop" CustomOperator [TypeQualifier] "(" Arg "," Arg ")" ":" Type "=" Exp ;
 Value. Declaration ::= "val" QIdent ":" Type "=" Exp ;
 ValueInferred. Declaration ::= "val" QIdent "=" Exp ;
 Import. Declaration ::= "import" Ident ;
-Data. Declaration ::= "data" QIdent "=" [DataCase] ; -- TODO type polymorphism
+Data. Declaration ::= "data" QIdent [QIdent] "=" [DataCase] ; -- TODO type polymorphism
 
 DataConstructor. DataCase ::= QIdent [Type] ;
-separator Type "" ;
+separator Type "*" ;
 separator nonempty DataCase "|" ;
 
 Argument. Arg ::= QIdent ":" Type ;
@@ -25,14 +26,14 @@ FreeTypeVariable. TypeQualifier ::= "[" QIdent "]" ;
 -- RestrictedTypeVariable. TypeQualifier ::= "[" QIdent ":" [TypeBound] "]" ;
 separator TypeQualifier "" ;
 
-SimpleTypeBound. TypeBound ::= QIdent ;
-separator nonempty TypeBound "," ;
+-- SimpleTypeBound. TypeBound ::= QIdent ;
+-- separator nonempty TypeBound "," ;
 
 terminator Declaration ";" ;
 separator  Arg "," ;
 
 Atom. Type2 ::= QIdent;
---UnitAtom. Type2 ::= "()" ;
+UnitAtom. Type2 ::= "()" ;
 Abstraction. Type ::= Type2 "->" Type ;
 Constructor. Type ::= QIdent [Type2] ;
 separator nonempty Type2 "" ;
@@ -42,8 +43,9 @@ coercions Type 2 ;
 EApp. Exp ::= Exp Exp2 ;
 ECustomOp. Exp1 ::= Exp1 CustomOperator Exp2 ;
 EIfThenElse. Exp1 ::= "if" Exp2 "then" Exp2 "else" Exp2 ;
-ELambda. Exp1 ::= "\\" Ident "->" Exp2 ;
+ELambda. Exp1 ::= "\\" QIdent "->" Exp2 ;
 EMatch. Exp ::= "case" Exp "of" "{" [Case] "}" ;
+EDo. Exp ::= "do" "{" [DoClause] "}" ;
 EAdd. Exp2 ::= Exp2 "+" Exp3 ;
 ESub. Exp2 ::= Exp2 "-" Exp3 ;
 EMul. Exp3 ::= Exp3 "*" Exp4 ;
@@ -63,3 +65,7 @@ coercions Exp 4 ;
 SimpleCase. Case ::= "|" QIdent [QIdent] "->" Exp ;
 separator Case "" ;
 separator QIdent "" ;
+
+DoExp. DoClause ::= Exp ;
+DoLet. DoClause ::= QIdent "<-" Exp ;
+separator nonempty DoClause ";"

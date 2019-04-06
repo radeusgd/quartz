@@ -1,0 +1,21 @@
+def id[a](x: a):a = x;
+
+def const[a][b](a: a, b: b): a = a;
+
+data List a = Nil | Cons a * (List a);
+
+def length[a](l: List a): Int = case l of {
+    | Nil -> 0
+    | Cons x tail -> 1 + length tail
+};
+
+def echo(): IO () = readLine >>= (\ line -> print line);
+
+def main(): IO () = do {
+    print "Line 1:";
+    a <- readLine;
+    print "Line 2:";
+    b <- readLine;
+    print "Concatenated:";
+    print (a <+> b)
+};

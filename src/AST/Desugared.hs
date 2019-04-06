@@ -31,6 +31,7 @@ data Exp
   = EApplication Exp Exp
   | EVar Ident
   | EConst Value
+  | ELambda Ident Exp
   | EBlock [Declaration] Exp
   deriving Show
 
@@ -63,5 +64,6 @@ instance Pretty Exp where
   pretty (EApplication a b) = parens (pretty a <+> pretty b)
   pretty (EVar v) = pretty v
   pretty (EConst v) = pretty v
+  pretty (ELambda v e) = "λ" <> pretty v <> "." <+> pretty e
   pretty (EBlock decls exp) =
     braces $ nest 4 (line <> vsep (map pretty decls) <> line <> pretty exp <> line)

@@ -37,10 +37,16 @@ desugarExpression A.EFalse = D.EConst $ VBool False
 desugarExpression (A.EUndefined) = D.EVar "undefined" -- TODO not sure if that's how I want this?
 desugarExpression (A.EBlock decls e) =
   D.EBlock (map desugarDeclaration decls) (desugarExpression e)
+desugarExpression A.EUnit = D.EVar "TODO"
+desugarExpression (A.EMatch e cases) = D.EVar "TODO"
+desugarExpression (A.ELambda (QIdent (_, v)) e) = D.ELambda v (desugarExpression e)
+desugarExpression (A.EDo clauses) = desugarDoNotation clauses
 
 -- TODO the typing pass may need to use some Reader or State to keep track of fresh variables once we add better inference
 desugarType :: A.Type -> D.Type
 desugarType (A.Atom (QIdent (_, name))) = D.Atom name
+desugarType A.UnitAtom = D.Atom "()"
+desugarType (A.Constructor (QIdent (_, name)) args) = D.Atom name -- TODO FIXME constructor args support!!!
 desugarType (A.Abstraction ta tb) = D.Abstraction (desugarType ta) (desugarType tb)
 
 -- returns type of a functions with given list of arguments and return value
@@ -50,18 +56,18 @@ buildApplicationType args rettype = go (reverse args) rettype where
   go (h:t) rettype = go t (D.Abstraction h rettype) -- we first apply the innermost abstraction, that is the last argument
 
 desugarDeclaration :: A.Declaration -> D.Declaration
-desugarDeclaration (A.Func (QIdent (_, name)) args rettype exp) =
-  desugarFunction name [] args (Just rettype) exp
-desugarDeclaration (A.GenericFunc (QIdent (_, name)) qualifiers args rettype exp) =
+desugarDeclaration (A.Func (QIdent (_, name)) qualifiers args rettype exp) =
   desugarFunction name qualifiers args (Just rettype) exp
-desugarDeclaration (A.Operator (CustomOperator op) a1 a2 rettype exp) = -- TODO add Position to CustomOperator to get rid of this undefined
-  desugarFunction op [] [a1, a2] (Just rettype) exp
+desugarDeclaration (A.ParameterlessFunc (QIdent (_, name)) qualifiers rettype exp) =
+  desugarFunction name qualifiers [] (Just rettype) exp
+desugarDeclaration (A.Operator (CustomOperator op) qualifiers a1 a2 rettype exp) = -- TODO add Position to CustomOperator to get rid of this undefined
+  desugarFunction op qualifiers [a1, a2] (Just rettype) exp
 desugarDeclaration (A.Value (QIdent (_, name)) rettype exp) = -- treat values as 0-arg functions
   desugarFunction name [] [] (Just rettype) exp
 desugarDeclaration (A.ValueInferred (QIdent (_, name)) exp) = -- treat values as 0-arg functions
   desugarFunction name [] [] Nothing exp
 desugarDeclaration (A.Import (Ident name)) = D.Import name
-desugarDeclaration (A.Data (QIdent (_, typename)) cases) = D.DataType typename (map desugarDataCase cases)
+desugarDeclaration (A.Data (QIdent (_, typename)) args cases) = D.DataType typename (map desugarDataCase cases) -- TODO
   where
     desugarDataCase (A.DataConstructor (QIdent (_, name)) types) = D.DataTypeCase name (map desugarType types)
 
@@ -81,3 +87,20 @@ desugarFunction f qualifiedTypes args rettype exp = -- TODO polymorphism
   bindQualified :: [TypeQualifier] -> D.Type -> D.Type
   bindQualified [] t = t
   bindQualified (FreeTypeVariable (QIdent (_, v)) : tail) t = ForAll v (bindQualified tail t)
+
+desugarDoNotation :: [A.DoClause] -> D.Exp
+desugarDoNotation [] = error "Empty do"
+desugarDoNotation [DoExp e] = desugarExpression e
+desugarDoNotation [DoLet _ e] = desugarExpression e
+desugarDoNotation (DoExp e :t) =
+  (D.EApplication
+   (D.EApplication
+    (D.EVar ">>") (desugarExpression e))
+   (desugarDoNotation t)
+  )
+desugarDoNotation (DoLet (QIdent (_, v)) e :t) =
+  (D.EApplication
+   (D.EApplication
+    (D.EVar ">>=") (desugarExpression e))
+   (D.ELambda v (desugarDoNotation t))
+  )
