@@ -1,0 +1,97 @@
+import Test;
+
+// polymorphic types
+def id[a](x: a):a = x;
+
+def const[a][b](a: a, b: b): a = a;
+
+// these will be defined in Prelude, but are included for the sake of demonstration
+data List a = Nil | Cons a * (List a);
+data Maybe a = Nothing | Just a;
+
+def length[a](l: List a): Int = case l of {
+    | Nil -> 0
+    | Cons x tail -> 1 + length tail
+};
+
+// lambdas with type reconstruction
+def echo(): IO () = readLine >>= (\ line -> print line);
+
+// recursive definitions are allowed, but full type signature is required
+def fact(n: Int): Int = if (n == 0)
+    then 1
+    else n * fib (n - 1);
+
+def concat[a](x: List a, y: List a): List a = case x of {
+    | Nil -> y
+    | Cons h t -> Cons h (concat t y)
+};
+
+def block(a: Int, b: Int): Int = {
+    // let-blocks with type reconstruction
+    // top-level definitions need full type by design
+    val c = a + b;
+    val d: String = {
+        val x: String = "a";
+        val y: String = "b";
+        x <+> y
+    };
+    def go(x: Int): Int = c * x;
+    toString ((go a) <+> d)
+};
+
+/*
+  do notation that's transformed into >> and >>=
+  Initially, >>= :: IO a -> (a -> IO b) -> IO b
+  Type classes not supported in first version.
+*/
+def twolines(): IO () = do {
+    print "Line 1:";
+    a <- readLine;
+    print "Line 2:";
+    b <- readLine;
+    print "Concatenated:";
+    print (a <+> b)
+};
+
+def head[a](l: List a): a = case l of {
+    | Nil -> error "head called on empty list"
+    | Cons x t -> x
+};
+
+def headMay[a](l: List a): Maybe a = case l of {
+    | Nil -> Nothing
+    | Cons x t -> Just x
+};
+
+def todo[a](): a = ???; // a placeholder for not implemented operations that's equal to `error "???"`
+
+// ability to define custom operators (all custom operators have the same precedence)
+defop ><[a][b][c](f: a -> b, g: b -> c): a -> c = \x -> f (g x);
+
+def main(): IO () = do {
+    {
+        val len = length (concat [1.0,2.0] [3.0,4.0]);
+        print (id >< toString len) // 4
+    };
+    print "fact 5 = ";
+    print (fact 5); // 120
+    print (head ["a", "b", "c"]); // a
+    print (const "a" 3); // a
+    echo;
+    twolines
+};
+
+/*
+  Used builtins:
+  + : Int -> Int -> Int
+  * : Int -> Int -> Int
+  <+> : String -> String -> String
+  if_then_else : Forall a. Bool -> a -> a -> a
+  print : String -> IO ()
+  readLine : IO String
+  >> : Forall a,b. IO a -> IO b -> IO b
+  >>= : Forall a,b. IO a -> (a -> IO b) -> IO b
+  ??? : Forall a. a
+  error : Forall a. String -> a
+*/

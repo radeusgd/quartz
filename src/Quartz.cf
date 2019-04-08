@@ -12,7 +12,7 @@ ParameterlessFunc. Declaration ::= "def" QIdent [TypeQualifier] "()" ":" Type "=
 Operator. Declaration ::= "defop" CustomOperator [TypeQualifier] "(" Arg "," Arg ")" ":" Type "=" Exp ;
 Value. Declaration ::= "val" QIdent ":" Type "=" Exp ;
 ValueInferred. Declaration ::= "val" QIdent "=" Exp ;
-Import. Declaration ::= "import" Ident ;
+Import. Declaration ::= "import" QIdent ;
 Data. Declaration ::= "data" QIdent [QIdent] "=" [DataCase] ; -- TODO type polymorphism
 
 DataConstructor. DataCase ::= QIdent [Type] ;
