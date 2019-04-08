@@ -8,6 +8,10 @@ def const[a][b](a: a, b: b): a = a;
 // these will be defined in Prelude, but are included for the sake of demonstration
 data List a = Nil | Cons a * (List a);
 data Maybe a = Nothing | Just a;
+def getOrElse[a](m: Maybe a, default: a): a = case m of {
+    | Nothing -> default
+    | Just x -> x
+};
 
 def length[a](l: List a): Int = case l of {
     | Nil -> 0
@@ -69,6 +73,15 @@ def todo[a](): a = ???; // a placeholder for not implemented operations that's e
 // ability to define custom operators (all custom operators have the same precedence)
 defop ><[a][b][c](f: a -> b, g: b -> c): a -> c = \x -> f (g x);
 
+// limit strictly evaluates it's second argument and if it exceeds the amount of function applications permitted (first argument), it terminates the computation and yields Nothing; if the computation succeeds without exceeding the quota, it yields Just (the result fo the computation)
+def infiniteRec(): String = "a" <+> infiniteRec;
+val limited: String = getOrElse (limit 1000 infiniteRec) "terminated";
+
+def flatten[a](l: List (List a)): List a = case l of {
+    Nil -> Nil
+    Cons l1 tail -> concat l1 (flatten tail)
+};
+
 def main(): IO () = do {
     {
         val len = length (concat [1.0,2.0] [3.0,4.0]);
@@ -78,6 +91,12 @@ def main(): IO () = do {
     print (fact 5); // 120
     print (head ["a", "b", "c"]); // a
     print (const "a" 3); // a
+    print limited; // terminated
+    {
+        val lst: List (List Int) = [[1,2],[],[],[3,4],[]];
+        val len = length (flatten lst);
+        print len // 4
+    };
     echo;
     twolines
 };
@@ -94,4 +113,5 @@ def main(): IO () = do {
   >>= : Forall a,b. IO a -> (a -> IO b) -> IO b
   ??? : Forall a. a
   error : Forall a. String -> a
+  limit : Forall a. Int -> a -> Maybe a
 */

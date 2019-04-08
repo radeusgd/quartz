@@ -44,8 +44,6 @@ EApp. Exp ::= Exp Exp2 ;
 ECustomOp. Exp1 ::= Exp1 CustomOperator Exp2 ;
 EIfThenElse. Exp1 ::= "if" Exp2 "then" Exp2 "else" Exp2 ;
 ELambda. Exp1 ::= "\\" QIdent "->" Exp2 ;
-EMatch. Exp ::= "case" Exp "of" "{" [Case] "}" ;
-EDo. Exp ::= "do" "{" [DoClause] "}" ;
 EAdd. Exp2 ::= Exp2 "+" Exp3 ;
 ESub. Exp2 ::= Exp2 "-" Exp3 ;
 EMul. Exp3 ::= Exp3 "*" Exp4 ;
@@ -60,6 +58,8 @@ EUndefined. Exp4 ::= "???" ;
 EUnit. Exp4 ::= "()" ;
 EBlock. Exp4 ::= "{" [Declaration] Exp "}" ;
 EList. Exp4 ::= "[" [Exp] "]" ;
+EMatch. Exp4 ::= "case" Exp "of" "{" [Case] "}" ;
+EDo. Exp4 ::= "do" "{" [DoClause] "}" ;
 separator Exp "," ;
 coercions Exp 4 ;
 
