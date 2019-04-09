@@ -29,15 +29,15 @@ desugarExpression (A.EMul a b) =
 desugarExpression (A.EDiv a b) =
   desugarExpression (A.ECustomOp a (CustomOperator "/") b)
 desugarExpression (A.EVar (QIdent (_, v))) = D.EVar v
-desugarExpression (A.EStr s) = D.EConst $ VStr s
-desugarExpression (A.EInt i) = D.EConst $ VInt i
-desugarExpression (A.EDouble d) = D.EConst $ VDouble d
-desugarExpression A.ETrue = D.EConst $ VBool True
-desugarExpression A.EFalse = D.EConst $ VBool False
-desugarExpression (A.EUndefined) = D.EVar "undefined" -- TODO not sure if that's how I want this?
+desugarExpression (A.EStr s) = D.EConst $ LStr s
+desugarExpression (A.EInt i) = D.EConst $ LInt i
+desugarExpression (A.EDouble d) = D.EConst $ LDouble d
+desugarExpression A.ETrue = D.EConst $ LBool True
+desugarExpression A.EFalse = D.EConst $ LBool False
+desugarExpression (A.EUndefined) = D.EConst $ LError "undefined"
 desugarExpression (A.EBlock decls e) =
   D.EBlock (map desugarDeclaration decls) (desugarExpression e)
-desugarExpression A.EUnit = D.EVar "TODO"
+desugarExpression A.EUnit = D.EConst $ LUnit
 desugarExpression (A.EMatch e cases) = D.EVar "TODO"
 desugarExpression (A.ELambda (QIdent (_, v)) e) = D.ELambda v (desugarExpression e)
 desugarExpression (A.EDo clauses) = desugarDoNotation clauses
@@ -47,7 +47,7 @@ desugarExpression (A.EList elems) = desugarList elems
 desugarType :: A.Type -> D.Type
 desugarType (A.Atom (QIdent (_, name))) = D.Atom name
 desugarType A.UnitAtom = D.Atom "()"
-desugarType (A.Constructor (QIdent (_, name)) args) = D.Atom name -- TODO FIXME constructor args support!!!
+desugarType (A.Constructor (QIdent (_, name)) args) = error "TODO" -- D.Atom name -- TODO FIXME constructor args support!!!
 desugarType (A.Abstraction ta tb) = D.Abstraction (desugarType ta) (desugarType tb)
 
 -- returns type of a functions with given list of arguments and return value
@@ -67,8 +67,8 @@ desugarDeclaration (A.Value (QIdent (_, name)) rettype exp) = -- treat values as
   desugarFunction name [] [] (Just rettype) exp
 desugarDeclaration (A.ValueInferred (QIdent (_, name)) exp) = -- treat values as 0-arg functions
   desugarFunction name [] [] Nothing exp
-desugarDeclaration (A.Import (QIdent (_, name))) = D.Import name
-desugarDeclaration (A.Data (QIdent (_, typename)) args cases) = D.DataType typename (map desugarDataCase cases) -- TODO
+desugarDeclaration (A.Import (QIdent (_, name))) = error "TODO" --D.Import name
+desugarDeclaration (A.Data (QIdent (_, typename)) args cases) = error "TODO" -- D.DataType typename (map desugarDataCase cases) -- TODO
   where
     desugarDataCase (A.DataConstructor (QIdent (_, name)) types) = D.DataTypeCase name (map desugarType types)
 
@@ -76,18 +76,17 @@ desugarFunction :: String -> [TypeQualifier] -> [A.Arg] -> Maybe A.Type -> A.Exp
 desugarFunction f qualifiedTypes args rettype exp = -- TODO polymorphism
   D.Function f args' type' exp' where
   args' = map desugarArgs args
-  rettype' = fromMaybe D.Unbound (desugarType <$> rettype)
-  type' = bindQualified qualifiedTypes $ buildApplicationType (map argType args) $ rettype'
+  rettype' = desugarType <$> rettype
+  type' = bindQualified qualifiedTypes . buildApplicationType (map argType args) <$> rettype'
   exp' = desugarExpression exp
-  desugarArgs :: A.Arg -> D.Arg
-  desugarArgs (A.Argument (QIdent (_, a)) _) = D.Argument a
-  desugarArgs (A.ArgumentWithDefault (QIdent (_, a)) _ _) = D.Argument a -- TODO default values
+  desugarArgs :: A.Arg -> Ident
+  desugarArgs (A.Argument (QIdent (_, a)) _) = a
+  desugarArgs (A.ArgumentWithDefault (QIdent (_, a)) _ _) = a -- TODO default values
   argType :: A.Arg -> D.Type
   argType (A.Argument _ t) = desugarType t
   argType (A.ArgumentWithDefault _ t _) = desugarType t
-  bindQualified :: [TypeQualifier] -> D.Type -> D.Type
-  bindQualified [] t = t
-  bindQualified (FreeTypeVariable (QIdent (_, v)) : tail) t = ForAll v (bindQualified tail t)
+  bindQualified :: [TypeQualifier] -> D.Type -> D.QualifiedType
+  bindQualified quals tt = ForAll (map (\(FreeTypeVariable (QIdent (_, v))) -> v) quals) tt
 
 desugarDoNotation :: [A.DoClause] -> D.Exp
 desugarDoNotation [] = error "Empty do"

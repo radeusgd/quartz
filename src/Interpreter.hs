@@ -8,7 +8,7 @@ import Control.Monad.Identity
 import Debug.Trace
 
 import qualified AST.Desugared as Desugared
-import AST.Typed
+import AST.Desugared
 
 data Value
   = VStr String
@@ -48,12 +48,12 @@ emptyEnv = Env M.empty
 emptyMemory :: Memory
 emptyMemory = Memory M.empty 0
 
-fromLiteral :: Desugared.Value -> Interpreter Value
-fromLiteral (Desugared.VStr s) = return $ VStr s
-fromLiteral (Desugared.VInt s) = return $ VInt s
-fromLiteral (Desugared.VDouble s) = return $ VDouble s
-fromLiteral (Desugared.VBool s) = return $ VBool s
-fromLiteral (Desugared.VUndefined) = throwError "Evaluating undefined"
+fromLiteral :: Desugared.Literal -> Interpreter Value
+fromLiteral (LStr s) = return $ VStr s
+fromLiteral (LInt s) = return $ VInt s
+fromLiteral (LDouble s) = return $ VDouble s
+fromLiteral (LBool s) = return $ VBool s
+fromLiteral (LError s) = throwError s
 
 getJustOrError :: MonadError e m => e -> Maybe a -> m a
 getJustOrError _ (Just v) = return v
@@ -90,7 +90,7 @@ setValue' loc val = modify go where
   go s = s { locs = M.insert loc val (locs s) }
 
 processDefinition :: Env -> Declaration -> Interpreter Env
-processDefinition env (Function _ name args exp) = do
+processDefinition env (Function name args tt exp) = do
   loc <- alloc
   let env' = bind name loc env
   val <- local (\_ -> env') $ buildFunction args exp
@@ -108,13 +108,13 @@ processDefinition env (Function _ name args exp) = do
       return $ VFunction h env (buildFunction t e)
 
 interpret :: Exp -> Interpreter Value
-interpret (EConst _ c) = fromLiteral c
+interpret (EConst  c) = fromLiteral c
 interpret (EBlock decls e) = do
   env <- ask
   innerEnv <- foldM processDefinition env decls
   local (\_ -> innerEnv) $ interpret e
-interpret (EVar _ v) = readVar v
-interpret (EApplication _ fun arg) = do
+interpret (EVar v) = readVar v
+interpret (EApplication fun arg) = do
   fun' <- interpret fun
   arg' <- interpret arg
   case fun' of

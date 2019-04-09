@@ -78,8 +78,8 @@ def infiniteRec(): String = "a" <+> infiniteRec;
 val limited: String = getOrElse (limit 1000 infiniteRec) "terminated";
 
 def flatten[a](l: List (List a)): List a = case l of {
-    Nil -> Nil
-    Cons l1 tail -> concat l1 (flatten tail)
+    | Nil -> Nil
+    | Cons l1 tail -> concat l1 (flatten tail)
 };
 
 def main(): IO () = do {

@@ -1,0 +1,4 @@
+// polymorphic types
+def id[a](x: a):a = x;
+
+def const[a][b](a: a, b: b): a = a;
