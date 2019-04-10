@@ -26,6 +26,7 @@ import Linker
 import Data.Text.Prettyprint.Doc as Pretty
 import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
+import Repl
 
 parseFile' :: String -> IO (Err [Abs.Declaration])
 parseFile' fname = do
@@ -198,7 +199,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    -- ["repl"] -> runRepl
+    ["repl"] -> runRepl
     -- ["check", fname] -> runCheck fname
     ["extract", fname] -> runExtract fname
     -- ["run", fname] -> runRun fname

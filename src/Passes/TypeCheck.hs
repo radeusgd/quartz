@@ -109,19 +109,34 @@ closeType' ftv tt = ForAll vars tt' where
    subst = M.fromList $ zip ftv $ map Atom vars
    tt' = substituteFreeVariables subst tt
 
-freshType :: TCM Type
-freshType = do
+freshFreeType :: TCM Type
+freshFreeType = do
   i <- gets tcsNameSupply
   modify $ \s -> s { tcsNameSupply = i + 1 }
   return $ FreeVariable i
 
-freshQualifiedType :: QualifiedType
-freshQualifiedType = ForAll ["'a"] (Atom "'a")
+freshRigidType :: String -> TCM Type
+freshRigidType str = do
+  i <- gets tcsNameSupply
+  modify $ \s -> s { tcsNameSupply = i + 1 }
+  return $ Atom ('\'' : show i ++ str)
 
 instantiate :: QualifiedType -> TCM Type
-instantiate (ForAll vars ttype)= do
-  substs <- mapM (\i -> freshType >>= \v -> return (i, v)) vars
-  return $ substituteAtoms (M.fromList substs) ttype
+instantiate qt = fst <$> instantiate' qt (const freshFreeType)
+
+instantiate' :: QualifiedType -> (String -> TCM Type) -> TCM (Type, [Type]) -- TODO maybe remove this...
+instantiate' (ForAll vars ttype) freshType = do
+  substs <- mapM (\i -> freshType i >>= \v -> return (i, v)) vars
+  return (substituteAtoms (M.fromList substs) ttype, map snd substs)
+
+instantiateRigid :: QualifiedType -> TCM Type
+instantiateRigid qt = fst <$> instantiate' qt freshRigidType
+
+-- rigidify :: [Type] -> Env -> Env
+-- rigidify vars e = e { eFreeVars = Set.union (Set.fromList ints) (eFreeVars e) } where
+--   ints = map fvtoi vars
+--   fvtoi (FreeVariable i) = i
+--   fvtoi _ = error "Rigidify called on a non-FV"
 
 unify :: Type -> Type -> TCM ()
 unify ta tb =
@@ -134,20 +149,25 @@ buildLambda (a:t) e = ELambda a (buildLambda t e)
 inferD :: Declaration -> TCM Type
 inferD (Function name args usertype e) = do
   ttype <- inferE $ buildLambda args e
-  traverse (instantiate >=> unify ttype) usertype -- make sure user specified type fits with inferred
+  case usertype of
+    Nothing -> return ()
+    -- make sure user specified type fits with inferred
+    Just tt -> do
+      tt' <- instantiateRigid tt
+      unify ttype tt'
   return ttype
 
 inferE :: Exp -> TCM Type
 inferE (EApplication f arg) = do
   f' <- inferE f
   arg' <- inferE arg
-  res <- freshType
+  res <- freshFreeType
   unify f' (Abstraction arg' res)
   return res
 inferE (EVar v) = readVar v
 inferE (EConst c) = literalType c
 inferE (ELambda x e) = do
-  xt <- freshType
+  xt <- freshFreeType
   et <- withVar x (ForAll [] xt) $ inferE e
   return $ Abstraction xt et
 inferE (EBlock decls e) = inferBlock decls e
@@ -165,7 +185,7 @@ literalType (LInt _) = return $ Atom "Int"
 literalType (LDouble _) = return $ Atom "Double"
 literalType (LBool _) = return $ Atom "Bool"
 literalType (LUnit) = return $ Atom "()"
-literalType (LError _) = freshType
+literalType (LError _) = freshFreeType
 -- checkDeclaration :: Env -> Declaration -> Either TypeError Declaration
 -- checkDeclaration env decl = runReaderT (checkDeclaration' decl) env
 
@@ -192,7 +212,7 @@ findRepr i = do
 
 bindVar :: Integer -> Type -> Unify' ()
 bindVar i ttype = do
-  traceShowM (i, ttype)
+  -- traceShowM (i, ttype)
   vr <- findRepr i
   tt <- lift $ lift $ descriptor vr -- find current eq class representative
   case tt of
@@ -212,7 +232,7 @@ unifyOne ta tb = throwError $ TypeMismatch ta tb
 
 unifyMany :: [(Type, Type)] -> Unify' ()
 unifyMany [] = return ()
-unifyMany ((a, b) : t) = traceShowM [a,b] >> unifyOne a b >> unifyMany t
+unifyMany ((a, b) : t) = unifyOne a b >> unifyMany t
 
 makeEqClasses :: Set.Set Integer -> Unify (M.Map Integer (Point Type))
 makeEqClasses ints = lift $ M.fromList <$> (mapM (\i -> do f <- fresh (FreeVariable i); return (i, f)) (Set.toList ints))
@@ -235,7 +255,7 @@ unifyConstraints constraints = runIdentity $ runUnionFind $ runExceptT $ do
 runInfer :: TCM a -> Either TypeError (a, Subst)
 runInfer m = do
   (a, (TcState _ constraints)) <- runReaderT (runStateT m emptyTcState) emptyEnv
-  traceShowM constraints
+  -- traceShowM constraints
   subst <- unifyConstraints constraints
   return (a, subst)
 

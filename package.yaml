@@ -26,6 +26,7 @@ dependencies:
 - mtl
 - containers
 - union-find
+- repline
 
 library:
   source-dirs: src
