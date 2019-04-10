@@ -1,0 +1,15 @@
+// special syntax for defining builtin +,*,-,/
+defop (+) (a: Int, b: Int): Int = ???;
+defop (*) (a: Int, b: Int): Int = ???;
+defop <+> (a: String, b: String): String = ???;
+def if_then_else[a](cond: Bool, tt: a, ff: a): a = ???;
+
+/*
+  print : String -> IO ()
+  readLine : IO String
+  >> : Forall a,b. IO a -> IO b -> IO b
+  >>= : Forall a,b. IO a -> (a -> IO b) -> IO b
+  ??? : Forall a. a
+  error : Forall a. String -> a
+  limit : Forall a. Int -> a -> Maybe a
+ */

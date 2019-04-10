@@ -14,8 +14,7 @@ import Quartz.Syntax.ErrM
 
 import Passes.Desugar
 import Passes.EmbedTypes
-import qualified AST.Typed as Typed
-import qualified AST.Desugared as Desugared
+import AST.Desugared
 import Interpreter
 
 import Control.Monad
@@ -35,7 +34,7 @@ parseFile' fname = do
   let toks = myLexer contents
   return $ (\(Abs.Prog decls) -> decls) <$> pProgram toks
 
-parseFile :: String -> IO (Err [Desugared.Declaration])
+parseFile :: String -> IO (Err [Declaration])
 parseFile fname = do
   raw <- parseFile' fname
   return $ (map desugarDeclaration) <$> raw
@@ -140,19 +139,18 @@ collectSuccessOrPrintErrors printer lst =
 --   _ <- typeCheck embedded
 --   exitSuccess
 
--- runExtract :: String -> IO ()
--- runExtract fname = do
---   decls <- parseFile fname >>= handleSyntaxError
---   let embedded = map embedDeclaration decls
---   mapM_ printSignature embedded
---   exitSuccess
---   where
---     printSignature :: Typed.Declaration -> IO ()
---     printSignature (Typed.Function ttype name args _) = putStrLn sig where
---       sig = name ++ "(" ++ printArgs args ++ ")" ++ ": " ++ show ttype
---       printArgs [] = ""
---       printArgs [arg] = arg
---       printArgs (arg : t) = arg ++ ", " ++ printArgs t
+runExtract :: String -> IO ()
+runExtract fname = do
+  decls <- parseFile fname >>= handleSyntaxError
+  mapM_ printSignature decls
+  exitSuccess
+  where
+    printSignature :: Declaration -> IO ()
+    printSignature (Function name args ttype _) = putStrLn sig where
+      sig = name ++ "(" ++ printArgs args ++ ")" ++ ": " ++ maybe "???" show ttype
+      printArgs [] = ""
+      printArgs [arg] = arg
+      printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
 -- runMain :: [Typed.Declaration] -> Either Interpreter.ErrorType Interpreter.Value
 -- runMain decls = runWithBuiltins builtins $ withDeclared decls $ interpret (Typed.EVar undefined "main")
@@ -177,6 +175,12 @@ runDebug fname = do
   let desugared = map desugarDeclaration decls
   putStrLn "\n[Desugared]"
   mapM_ prettyLine desugared
+  putStrLn "Typechecking"
+  builtinTypes <- loadBuiltinDecls
+  let tcres = evalInfer $ withTopLevelDecls builtinTypes $ typeCheckTopLevel desugared
+  case tcres of
+    Left err -> putStrLn ("Typechecker error: " ++ show err) >> exitFailure
+    Right () -> putStrLn "Types ok."
   -- let embedded = map embedDeclaration desugared
   -- putStrLn "\n[Embedded]"
   -- mapM_ prettyLine embedded
@@ -196,7 +200,7 @@ main = do
   case args of
     -- ["repl"] -> runRepl
     -- ["check", fname] -> runCheck fname
-    -- ["extract", fname] -> runExtract fname
+    ["extract", fname] -> runExtract fname
     -- ["run", fname] -> runRun fname
     ["debug", fname] -> runDebug fname
     _ -> putStrLn "TODO usage"

@@ -1,5 +1,24 @@
 module Builtins where --(builtins, Builtin, makeTypeEnv, runWithBuiltins, register) where
 
+import qualified Quartz.Syntax.AbsQuartz as Abs
+import qualified Quartz.Syntax.ParQuartz as Par
+import qualified Quartz.Syntax.ErrM as Err
+import AST.Desugared
+import Passes.Desugar
+import System.IO
+import Linker
+
+loadBuiltinDecls :: IO [Declaration]
+loadBuiltinDecls = do
+  stdlib <- findStdLib
+  fd <- openFile (stdlib ++ "/Builtins.quartz") ReadMode
+  contents <- hGetContents fd
+  let toks = Par.myLexer contents
+  let ed = (\(Abs.Prog decls) -> decls) <$> Par.pProgram toks
+  case ed of
+    Err.Bad s -> error $ "Fatal error: syntax error in Builtins.quartz: " ++ s
+    Err.Ok decls -> return $ map desugarDeclaration decls
+
 -- import qualified Data.Map as M
 -- import AST.Typed
 -- import Passes.TypeCheck(Env)

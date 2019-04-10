@@ -25,6 +25,7 @@ dependencies:
 - prettyprinter
 - mtl
 - containers
+- union-find
 
 library:
   source-dirs: src

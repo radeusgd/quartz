@@ -2,6 +2,7 @@
 module AST.Desugared where
 
 import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Render.String
 
 type Ident = String
 
@@ -18,10 +19,9 @@ data Type
   = Atom Ident
   | Abstraction Type Type
   | FreeVariable Integer
-  deriving Show
+  deriving Eq
 
 data QualifiedType = ForAll [Ident] Type
-  deriving Show
 
 data Declaration
   = Function Ident [Ident] (Maybe QualifiedType) Exp
@@ -58,8 +58,17 @@ instance Pretty Type where
   pretty (Abstraction a b) = parens $ (pretty a) <+> "->" <+> (pretty b)
   pretty (FreeVariable i) = "'" <> pretty i
 
+instance Show Type where
+  show = renderString . layoutSmart defaultLayoutOptions . pretty
+
+instance Show QualifiedType where
+  show = renderString . layoutSmart defaultLayoutOptions . pretty
+
 instance Pretty QualifiedType where
-  pretty (ForAll idents tt) = "∀" <> pretty idents <> "." <> pretty tt
+  pretty (ForAll idents tt) = qualifs <> pretty tt where
+    qualifs = case idents of
+      [] -> ""
+      _ -> "∀" <> pretty idents <> "."
 
 -- instance Pretty Arg where
 --   pretty (Argument ident) = pretty ident

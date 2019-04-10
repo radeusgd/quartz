@@ -2,6 +2,9 @@ module Linker where
 
 import Data.Map as M
 import Control.Monad.Except
+
+findStdLib :: IO FilePath
+findStdLib = return "stdlib" -- TODO
 -- import AST.Typed
 -- import Passes.TypeCheck
 

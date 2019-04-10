@@ -61,8 +61,14 @@ desugarDeclaration (A.Func (QIdent (_, name)) qualifiers args rettype exp) =
   desugarFunction name qualifiers args (Just rettype) exp
 desugarDeclaration (A.ParameterlessFunc (QIdent (_, name)) qualifiers rettype exp) =
   desugarFunction name qualifiers [] (Just rettype) exp
-desugarDeclaration (A.Operator (CustomOperator op) qualifiers a1 a2 rettype exp) = -- TODO add Position to CustomOperator to get rid of this undefined
-  desugarFunction op qualifiers [a1, a2] (Just rettype) exp
+desugarDeclaration (A.Operator (CustomOperator op) qualifiers a1 a2 rettype exp) =
+  desugarFunction (desugarOpName op) qualifiers [a1, a2] (Just rettype) exp
+  where
+    desugarOpName name =
+      if head name == '(' && last name == ')' then removeParens name
+      else name
+      where
+        removeParens str = tail $ take (length str - 1) str
 desugarDeclaration (A.Value (QIdent (_, name)) rettype exp) = -- treat values as 0-arg functions
   desugarFunction name [] [] (Just rettype) exp
 desugarDeclaration (A.ValueInferred (QIdent (_, name)) exp) = -- treat values as 0-arg functions
