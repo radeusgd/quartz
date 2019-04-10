@@ -2,7 +2,7 @@ comment "//" ;
 comment "/*" "*/" ;
 
 position token QIdent (letter (letter | digit | '_')*) ;
-token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' | '!' | '+' | '*' | '/' | '-')* | ('(''+'')') | ('(''*'')');
+token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' | '!' | '+' | '*' | '/' | '-')* | ('(''+'')') | ('(''*'')') | ('(''/'')') | ('(''-'')');
 
 Prog. Program ::= [Declaration] ;
 

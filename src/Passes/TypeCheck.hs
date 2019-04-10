@@ -192,6 +192,7 @@ findRepr i = do
 
 bindVar :: Integer -> Type -> Unify' ()
 bindVar i ttype = do
+  traceShowM (i, ttype)
   vr <- findRepr i
   tt <- lift $ lift $ descriptor vr -- find current eq class representative
   case tt of
@@ -200,18 +201,18 @@ bindVar i ttype = do
       tr <- fresh ttype
       union vr tr -- tr is second so that the equivalence class will have the concrete type as it's representative
     -- if the eq class is already bound to a type
-    _ -> if tt == ttype then return () -- if the types match, OK
-                        else throwError $ TypeMismatch tt ttype -- otherwise, fail
+    _ -> unifyOne tt ttype
 
 unifyOne :: Type -> Type -> Unify' ()
 unifyOne (FreeVariable i) t = bindVar i t
 unifyOne t (FreeVariable i) = bindVar i t
+unifyOne (Atom a) (Atom b) | a == b = return () -- same atoms are trivially unifiable
 unifyOne (Abstraction a1 b1) (Abstraction a2 b2) = unifyMany [(a1, a2), (b1, b2)]
 unifyOne ta tb = throwError $ TypeMismatch ta tb
 
 unifyMany :: [(Type, Type)] -> Unify' ()
 unifyMany [] = return ()
-unifyMany ((a, b) : t) = unifyOne a b >> unifyMany t
+unifyMany ((a, b) : t) = traceShowM [a,b] >> unifyOne a b >> unifyMany t
 
 makeEqClasses :: Set.Set Integer -> Unify (M.Map Integer (Point Type))
 makeEqClasses ints = lift $ M.fromList <$> (mapM (\i -> do f <- fresh (FreeVariable i); return (i, f)) (Set.toList ints))

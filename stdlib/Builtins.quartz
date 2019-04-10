@@ -1,7 +1,9 @@
 // special syntax for defining builtin +,*,-,/
 defop (+) (a: Int, b: Int): Int = ???;
+defop (-) (a: Int, b: Int): Int = ???;
 defop (*) (a: Int, b: Int): Int = ???;
 defop <+> (a: String, b: String): String = ???;
+defop == [t](a: t, b: t): Bool = ???;
 def if_then_else[a](cond: Bool, tt: a, ff: a): a = ???;
 
 /*
