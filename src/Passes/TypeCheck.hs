@@ -14,9 +14,11 @@ import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.Maybe
 
-import Debug.Trace
+-- import Debug.Trace
 
 import AST.Desugared
+
+data WithContext a = WithContext a String
 
 data TypeError
   = UnboundVariable String
@@ -36,32 +38,46 @@ instance Show TypeError where
   show (Other s) = "Other error: " ++ s
   show _ = "TODO unknown error"
 
-data Env = Env { eBindings :: M.Map Ident QualifiedType }
+instance Show a => Show (WithContext a) where
+  show (WithContext a ctx) = show a ++ " in " ++ ctx
+
+data Env = Env { eBindings :: M.Map Ident QualifiedType, eCtx :: String }
 
 emptyEnv :: Env
-emptyEnv = Env M.empty
+emptyEnv = Env M.empty "???"
 
 type Subst = M.Map Integer Type
-type TCM a = StateT TcState (ReaderT Env (Either TypeError)) a
+type TCM a = StateT TcState (ReaderT Env (Either (WithContext TypeError))) a
 type NameSupply = Integer
 data TcState = TcState {
   tcsNameSupply :: NameSupply
 }
 
+throwErrorWithContext :: TypeError -> TCM a
+throwErrorWithContext e = do
+  ctx <- asks eCtx
+  throwError $ WithContext e ctx
+
+inContext :: String -> TCM a -> TCM a
+inContext c = local (\e -> e { eCtx = c })
+
+extendContext :: String -> TCM a -> TCM a
+extendContext c = local (\e -> e { eCtx = c ++ " in " ++ eCtx e })
+
 emptyTcState :: TcState
 emptyTcState = TcState 0
 
-traceEnv :: TCM ()
-traceEnv = do
-  env <- asks eBindings
-  trace ("[ENV] " ++ show env) $ return ()
+-- traceEnv :: TCM ()
+-- traceEnv = do
+--   env <- asks eBindings
+--   trace ("[ENV] " ++ show env) $ return ()
 
 readVar' :: Ident -> TCM QualifiedType
 readVar' v = do
   env <- asks eBindings
   case M.lookup v env of
     Just t -> return t
-    Nothing -> throwError $ UnboundVariable v
+    Nothing -> throwErrorWithContext $ UnboundVariable v
 
 readVar :: Ident -> TCM Type
 readVar = readVar' >=> instantiate
@@ -69,7 +85,7 @@ readVar = readVar' >=> instantiate
 withVar :: Ident -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
   introduceType :: Ident -> QualifiedType -> Env -> Env
-  introduceType i qt@(ForAll _ tt) (Env b) = Env (M.insert i qt b) -- not sure if I shouldn't add free variables of tt to Env here?
+  introduceType i qt@(ForAll _ tt) (Env b ctx) = Env (M.insert i qt b) ctx -- not sure if I shouldn't add free variables of tt to Env here?
 
 emptySubst :: Subst
 emptySubst = M.empty
@@ -82,7 +98,7 @@ compose sa sb = M.union (M.map (substitute sa) sb) (M.map (substitute sb) sa)
 
 bindVar :: Integer -> Type -> TCM Subst
 bindVar i t =
-  if Set.member i (freeTypeVariables t) then throwError $ OccursCheck (FreeVariable i) t
+  if Set.member i (freeTypeVariables t) then throwErrorWithContext $ OccursCheck (FreeVariable i) t
   else if t == FreeVariable i then return emptySubst -- same variable so no need to make a substitution
   else return $ M.singleton i t
 
@@ -93,7 +109,7 @@ withTopLevelDecls :: [Declaration] -> TCM a -> TCM a
 withTopLevelDecls [] m = m
 withTopLevelDecls (Function name _ maytype _ : t) m = case maytype of
   Just qt -> withVar name qt $ withTopLevelDecls t m
-  Nothing -> throwError $ TopLevelTypeNotSpecified name
+  Nothing -> throwErrorWithContext $ TopLevelTypeNotSpecified name
 
 atomsForFreeVars :: [Ident]
 atomsForFreeVars = map (\i -> '\'' : show i) ([1..] :: [Integer])
@@ -160,22 +176,21 @@ unify (Abstraction a1 b1) (Abstraction a2 b2) = do
   s1 <- unify a1 a2
   s2 <- unify (substitute s1 b1) (substitute s1 b2)
   return $ s1 <#> s2
-unify ta tb = throwError $ TypeMismatch ta tb
+unify ta tb = throwErrorWithContext $ TypeMismatch ta tb
 
 buildLambda :: [Ident] -> Exp -> Exp
 buildLambda [] e = e
 buildLambda (a:t) e = ELambda a (buildLambda t e)
 
 inferD' :: Declaration -> TCM (Type, Subst)
-inferD' (Function name args usertype e) = do
+inferD' (Function name args usertype e) = inContext name $ do
   (ttype, s) <- inferE' $ buildLambda args e
   case usertype of
-    Nothing -> traceShowM ("Danon", name, ttype) >> return (ttype, s)
+    Nothing -> return (ttype, s)
     -- make sure user specified type fits with inferred
     Just tt -> do
       tt' <- instantiateRigid tt
       s' <- unify ttype tt'
-      traceShowM ("Dtype", name, s, ttype, tt, tt', (substitute s ttype))
       return (substitute s' ttype, s <#> s')
 
 inferE' :: Exp -> TCM (Type, Subst)
@@ -194,7 +209,7 @@ inferE' (ELambda x e) = do
 inferE' (EBlock decls e) = inferBlock decls e
 
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
-inferBlock [] e = traceEnv >> inferE' e
+inferBlock [] e = inferE' e
 inferBlock (d@(Function name _ _ _) : tail) e = do
   (declt, ss) <- inferD' d
   d' <- generalize declt
@@ -215,16 +230,16 @@ inferE e = fst <$> inferE' e
 inferD :: Declaration -> TCM Type
 inferD d = fst <$> inferD' d
 
-evalInfer :: TCM a -> Either TypeError a
+evalInfer :: TCM a -> Either (WithContext TypeError) a
 evalInfer m = runReaderT (evalStateT m emptyTcState) emptyEnv
 
-inferTypes :: TCM [Type] -> Either TypeError [QualifiedType]
+inferTypes :: TCM [Type] -> Either (WithContext TypeError) [QualifiedType]
 inferTypes m = do
   ts <- evalInfer m
   let qts = map closeType ts
   return qts
 
-inferType :: TCM Type -> Either TypeError QualifiedType
+inferType :: TCM Type -> Either (WithContext TypeError) QualifiedType
 inferType m = head <$> inferTypes ((:[]) <$> m)
 
 typeCheckTopLevel :: [Declaration] -> TCM ()
