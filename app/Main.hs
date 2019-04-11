@@ -115,30 +115,23 @@ collectSuccessOrPrintErrors printer lst =
   if null es then return as
   else mapM_ printer es >> exitFailure
 
--- preprocess :: [Abs.Declaration] -> [Typed.Declaration]
--- preprocess decls =
---   let desugared = map desugarDeclaration decls in
---   let embedded = map embedDeclaration desugared in
---     embedded
+typeCheck :: [Declaration] -> IO [Declaration]
+typeCheck decls = do
+  builtinTypes <- loadBuiltinDecls
+  let tcres = evalInfer $ withTopLevelDecls builtinTypes $ (typeCheckTopLevel decls)
+  case tcres of
+    Left err -> printTypeError err >> exitFailure
+    Right () -> return decls
+  where
+    printTypeError e = putStrLn $ "Type error: " ++ show e
 
--- typeCheck :: [Typed.Declaration] -> IO [Typed.Declaration]
--- typeCheck decls = do
---   let env = introduceTopLevelTypes decls initialTypingEnv
---   case env of
---     Left err -> printTypeError err >> exitFailure
---     Right env -> do
---       let checked = map (checkDeclaration env) decls
---       collectSuccessOrPrintErrors printTypeError checked
---   where
---     printTypeError e = putStrLn $ "Type error: " ++ show e
-
--- runCheck :: String -> IO ()
--- runCheck fname = do
---   parsed <- parseFile' fname
---   decls <- handleSyntaxError parsed
---   let embedded = preprocess decls
---   _ <- typeCheck embedded
---   exitSuccess
+runCheck :: String -> IO ()
+runCheck fname = do
+  parsed <- parseFile' fname
+  decls <- handleSyntaxError parsed
+  let desugared = map desugarDeclaration decls
+  _ <- typeCheck desugared
+  exitSuccess
 
 runExtract :: String -> IO ()
 runExtract fname = do
@@ -153,19 +146,19 @@ runExtract fname = do
       printArgs [arg] = arg
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
--- runMain :: [Typed.Declaration] -> Either Interpreter.ErrorType Interpreter.Value
--- runMain decls = runWithBuiltins builtins $ withDeclared decls $ interpret (Typed.EVar undefined "main")
+runMain :: [Declaration] -> Either Interpreter.ErrorType Interpreter.Value
+runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main")
 
--- runRun :: String -> IO ()
--- runRun fname = do
---   parsed <- parseFile' fname
---   decls <- handleSyntaxError parsed
---   let embedded = preprocess decls
---   typed <- typeCheck embedded
---   case runMain typed of
---     Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
---     Right res -> print res
---   exitSuccess
+runRun :: String -> IO ()
+runRun fname = do
+  parsed <- parseFile' fname
+  decls <- handleSyntaxError parsed
+  let desugared = map desugarDeclaration decls
+  typed <- typeCheck desugared
+  case runMain typed of
+    Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
+    Right res -> print res
+  exitSuccess
 
 runDebug :: String -> IO ()
 runDebug fname = do
@@ -178,20 +171,14 @@ runDebug fname = do
   mapM_ prettyLine desugared
   putStrLn "Typechecking"
   builtinTypes <- loadBuiltinDecls
-  let tcres = evalInfer $ withTopLevelDecls builtinTypes $ typeCheckTopLevel desugared
+  let tcres = evalInfer $ withTopLevelDecls builtinTypes $ (typeCheckTopLevel desugared) -- TODO typecheck should also look for existence of main
   case tcres of
     Left err -> putStrLn ("Typechecker error: " ++ show err) >> exitFailure
     Right () -> putStrLn "Types ok."
-  -- let embedded = map embedDeclaration desugared
-  -- putStrLn "\n[Embedded]"
-  -- mapM_ prettyLine embedded
-  -- typed <- typeCheck embedded
-  -- putStrLn "\n[Typed]"
-  -- mapM_ prettyLine typed
-  -- case runMain typed of
-  --   Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-  --   Right res -> print res
-  -- exitSuccess
+  case runMain desugared of
+    Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
+    Right res -> print res
+  exitSuccess
   where
     prettyLine x = (PrettyText.putDoc $ Pretty.pretty x) >> putStrLn ""
 
@@ -200,8 +187,8 @@ main = do
   args <- getArgs
   case args of
     ["repl"] -> runRepl
-    -- ["check", fname] -> runCheck fname
+    ["check", fname] -> runCheck fname
     ["extract", fname] -> runExtract fname
-    -- ["run", fname] -> runRun fname
+    ["run", fname] -> runRun fname
     ["debug", fname] -> runDebug fname
     _ -> putStrLn "TODO usage"

@@ -60,11 +60,11 @@ typeof args = do
   tenv <- gets rsTypeEnv
   let exp = parseExp (unwords args)
   case exp of
-    Left err -> liftIO $ putStrLn $ "Error" ++ err
+    Left err -> liftIO $ putStrLn $ "Error: " ++ err
     Right exp ->
       let t = showingError $ inferType $ withTopLevelDecls tenv $ inferE exp in
       case t of
-        Left err -> liftIO $ putStrLn $ "Error" ++ err
+        Left err -> liftIO $ putStrLn $ "Error: " ++ err
         Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t
 
 options :: [(String, [String] -> Repl ())]

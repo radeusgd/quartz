@@ -1,11 +1,17 @@
-module Builtins where --(builtins, Builtin, makeTypeEnv, runWithBuiltins, register) where
+module Builtins(
+  loadBuiltinDecls,
+  withBuiltins
+               ) where
 
 import qualified Quartz.Syntax.AbsQuartz as Abs
 import qualified Quartz.Syntax.ParQuartz as Par
 import qualified Quartz.Syntax.ErrM as Err
+import Control.Monad.Reader
+import Control.Monad.Except
 import AST.Desugared
 import Passes.Desugar
 import System.IO
+import Interpreter
 import Linker
 
 loadBuiltinDecls :: IO [Declaration]
@@ -19,6 +25,18 @@ loadBuiltinDecls = do
     Err.Bad s -> error $ "Fatal error: syntax error in Builtins.quartz: " ++ s
     Err.Ok decls -> return $ map desugarDeclaration decls
 
+register :: Env -> (String, Value) -> Interpreter Env
+register env (name, v) = do
+  loc <- alloc
+  setValue loc v
+  return $ bind name loc env
+
+withBuiltins :: Interpreter a -> Interpreter a
+withBuiltins m = do
+  env <- ask
+  env' <- foldM register env builtins
+  local (\_ -> env') m
+
 -- import qualified Data.Map as M
 -- import AST.Typed
 -- import Passes.TypeCheck(Env)
@@ -26,57 +44,40 @@ loadBuiltinDecls = do
 -- import qualified Interpreter as I
 -- import Control.Monad.Reader
 
+make1ArgFun :: (Value -> Value) -> Value
+make1ArgFun f = VFunction "x" emptyEnv $ do
+  x <- readVar "x"
+  return $ f x
 
--- data TypeHelper = Abs TypeHelper TypeHelper | Atm String
--- makeType :: TypeHelper -> Type
--- makeType (Atm s) = Atom s
--- makeType (Abs a b) = Abstraction (makeType a) (makeType b)
+make2ArgFun :: (Value -> Value -> Value) -> Value
+make2ArgFun f = VFunction "x" emptyEnv $ do
+  x <- readVar "x"
+  return $ VFunction "y" emptyEnv $ do
+    y <- readVar "y"
+    return $ f x y
 
--- data Builtin = Builtin Type Value
+make3ArgFun :: (Value -> Value -> Value -> Value) -> Value
+make3ArgFun f = VFunction "z" emptyEnv $ do
+  z <- readVar "z"
+  return $ make2ArgFun (f z)
 
--- int = Atm "Int"
--- str = Atm "String"
--- bool = Atm "Bool"
+builtins :: [(String, Value)]
+builtins = [
+  -- TODO actually plus should be polymorphic... but for now let's skip this
+  ("+", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x + y)),
+  ("*", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x * y)),
+  ("-", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x - y)),
+  ("/", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x `div` y)),
+  ("<+>", (make2ArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b)),
+  ("==", make2ArgFun $ \x -> \y -> VBool $ x == y),
+  ("if_then_else", (make3ArgFun $ \(VBool x) -> \tt -> \ff -> if x then tt else ff)),
+  ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg)
+           ]
 
--- makeSimpleType :: [TypeHelper] -> Type
--- makeSimpleType [t] = makeType t
--- makeSimpleType (h:t) = Abstraction (makeType h) (makeSimpleType t)
-
--- makeTwoArgFun :: (Value -> Value -> Value) -> Value
--- makeTwoArgFun f = VFunction "x" emptyEnv $ do
---   x <- readVar "x"
---   return $ VFunction "y" emptyEnv $ do
---     y <- readVar "y"
---     return $ f x y
-
--- make3ArgFun :: (Value -> Value -> Value -> Value) -> Value
--- make3ArgFun f = VFunction "z" emptyEnv $ do
---   z <- readVar "z"
---   return $ makeTwoArgFun (f z)
-
--- builtins :: [(String, Builtin)]
--- builtins = [
---   -- TODO actually plus should be polymorphic... but for now let's skip this
---   ("+", Builtin (makeSimpleType [int, int, int]) (makeTwoArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x + y)),
---   ("*", Builtin (makeSimpleType [int, int, int]) (makeTwoArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x * y)),
---   ("if_then_else", Builtin (makeType (Abs bool (Abs bool (Abs bool bool)))) (make3ArgFun $ \(VBool x) -> \tt -> \ff -> if x then tt else ff)),
---   ("<+>", Builtin (makeType (Abs str (Abs str str))) (makeTwoArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b))
---            ]
-
-
--- makeTypeEnv :: [(String, Builtin)] -> Env
--- makeTypeEnv = foldl register M.empty where
---   register :: Env -> (String, Builtin) -> Env
---   register env (name, Builtin tt _) =
---     M.insert name tt env
-
--- runWithBuiltins :: [(String, Builtin)] -> I.Interpreter a -> Either I.ErrorType a
--- runWithBuiltins builtins i = I.runInterpreter $ do
---   env <- foldM register I.emptyEnv builtins
---   local (\_ -> env) i
-
--- register :: I.Env -> (String, Builtin) -> I.Interpreter I.Env
--- register env (name, Builtin _ v) = do
---   loc <- I.alloc
---   I.setValue loc v
---   return $ I.bind name loc env
+instance Eq Value where
+  (VStr a) == (VStr b) = a == b
+  (VInt a) == (VInt b) = a == b
+  (VDouble a) == (VDouble b) = a == b
+  (VBool a) == (VBool b) = a == b
+  (VFunction _ _ _) == _ = error "Cannot compare functions" -- TODO promote this to interpreter error instead of crash
+  _ == _ = False
