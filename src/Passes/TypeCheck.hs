@@ -8,6 +8,7 @@ import Control.Monad.Trans.UnionFind
 import qualified Data.Map as M
 import qualified Data.List as List
 import qualified Data.Set as Set
+import Data.Maybe
 
 import Debug.Trace
 
@@ -85,7 +86,7 @@ freeTypeVariables (FreeVariable i) = Set.singleton i
 substituteFreeVariables :: M.Map Integer Type -> Type -> Type
 substituteFreeVariables _ a@(Atom _) = a
 substituteFreeVariables m (Abstraction a b) = Abstraction (substituteFreeVariables m a) (substituteFreeVariables m b)
-substituteFreeVariables m (FreeVariable i) = m M.! i
+substituteFreeVariables m v@(FreeVariable i) = fromMaybe v $ M.lookup i m
 
 substituteAtoms :: M.Map Ident Type -> Type -> Type
 substituteAtoms m a@(Atom i) = case M.lookup i m of

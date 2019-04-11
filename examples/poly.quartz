@@ -5,3 +5,20 @@ def const[a][b](a: a, b: b): a = a;
 
 def idint(x: Int): Int = id x;
 
+def let1(x: Int): Int = {
+    val f = \a -> a;
+    val g = \a -> a + 1;
+    g (f x)
+};
+
+def polyerr[a](): a = error "Fail";
+
+def idlet[a](x: a): a = {
+    val f = \v -> v;
+    f x
+};
+
+def idStrange[a](x: a -> a): a -> a = {
+    val f = \v -> v;
+    f
+};

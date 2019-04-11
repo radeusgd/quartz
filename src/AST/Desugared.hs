@@ -13,7 +13,6 @@ data Literal
   | LBool Bool
   | LUnit
   | LError String
-  deriving Show
 
 data Type
   = Atom Ident
@@ -42,7 +41,6 @@ data Exp
   | EConst Literal
   | ELambda Ident Exp
   | EBlock [Declaration] Exp
-  deriving Show
 
 instance Pretty Literal where
   pretty (LStr s) = dquotes $ pretty s
@@ -88,3 +86,9 @@ instance Pretty Exp where
   pretty (ELambda v e) = "λ" <> pretty v <> "." <+> pretty e
   pretty (EBlock decls exp) =
     braces $ nest 4 (line <> vsep (map pretty decls) <> line <> pretty exp <> line)
+
+instance Show Literal where
+  show = renderString . layoutSmart defaultLayoutOptions . pretty
+
+instance Show Exp where
+  show = renderString . layoutSmart defaultLayoutOptions . pretty
