@@ -5,6 +5,10 @@ defop (*) (a: Int, b: Int): Int = ???;
 defop (/) (a: Int, b: Int): Int = ???;
 defop <+> (a: String, b: String): String = ???;
 defop == [t](a: t, b: t): Bool = ???;
+defop <= (a: Int, b: Int): Bool = ???;
+defop >= (a: Int, b: Int): Bool = ???;
+defop < (a: Int, b: Int): Bool = ???;
+defop > (a: Int, b: Int): Bool = ???;
 def if_then_else[a](cond: Bool, tt: a, ff: a): a = ???;
 def error[a](message: String): a = ???;
 /*

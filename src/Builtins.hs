@@ -93,6 +93,10 @@ builtins = [
   ("/", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x `div` y)),
   ("<+>", (make2ArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b)),
   ("==", make2ArgFun $ \x -> \y -> VBool $ x == y),
+  ("<=", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x <= y),
+  (">=", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x >= y),
+  ("<", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x < y),
+  (">", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x > y),
   ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do (VBool x) <- force cond; return $ if x then tt else ff)),
   ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg)
            ]
