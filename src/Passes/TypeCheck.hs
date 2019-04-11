@@ -110,7 +110,7 @@ noSubst = ((\x -> (x, emptySubst)) <$>)
 withTopLevelDecls :: [Declaration] -> TCM a -> TCM a
 withTopLevelDecls [] m = m
 withTopLevelDecls (Function name _ maytype _ : t) m = case maytype of
-  Just qt -> withVar name qt $ withTopLevelDecls t m
+  Just qt -> withTopLevelDecls t $ withVar name qt m
   Nothing -> throwErrorWithContext $ TopLevelTypeNotSpecified name
 
 atomsForFreeVars :: [Ident]
