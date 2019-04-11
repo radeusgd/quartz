@@ -1,6 +1,7 @@
 module Builtins(
   loadBuiltinDecls,
-  withBuiltins
+  withBuiltins,
+  builtinsEnv
                ) where
 
 import qualified Quartz.Syntax.AbsQuartz as Abs
@@ -31,11 +32,15 @@ register env (name, v) = do
   setValue loc v
   return $ bind name loc env
 
+builtinsEnv :: Interpreter Env
+builtinsEnv = do
+  env <- ask
+  foldM register env builtins
+
 withBuiltins :: Interpreter a -> Interpreter a
 withBuiltins m = do
-  env <- ask
-  env' <- foldM register env builtins
-  local (\_ -> env') m
+  env <- builtinsEnv
+  local (\_ -> env) m
 
 -- import qualified Data.Map as M
 -- import AST.Typed

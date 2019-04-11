@@ -127,7 +127,7 @@ interpret (EApplication fun arg) = do
     _ -> throwError "Trying to apply to a non-function (why didn't typechecker catch this?)"
 
 runInterpreter :: Interpreter a -> Either ErrorType a
-runInterpreter i = runIdentity $ runExceptT $ evalStateT (runReaderT i emptyEnv) emptyMemory
+runInterpreter i = fst <$> execInterpreter emptyEnv emptyMemory i
 
 withDeclared :: [Declaration] -> Interpreter a -> Interpreter a
 withDeclared [] i = i

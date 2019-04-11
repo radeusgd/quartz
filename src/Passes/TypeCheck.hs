@@ -2,8 +2,10 @@ module Passes.TypeCheck(
   typeCheckTopLevel,
   withTopLevelDecls,
   inferType,
-  inferD,
+  inferDeclType,
+  inferExpType,
   inferE,
+  inferD,
   evalInfer
                        ) where
 
@@ -136,8 +138,16 @@ generalize tt = do
   let ftv = Set.toList $ freeTypeVariables tt
   return $ closeType' ftv tt
 
+-- TODO also caonicalize free variable names to a,b,c,...,'1,'2,...
 closeType :: Type -> QualifiedType
-closeType tt = closeType' (Set.toList $ freeTypeVariables tt) tt
+closeType tt =
+  let ForAll vars tt' = closeType' (Set.toList $ freeTypeVariables tt) tt in
+    ForAll (Set.toList (freeAtoms tt' `Set.union` Set.fromList vars)) tt'
+    where
+      freeAtoms (Atom i@('\'' : _)) = Set.singleton i
+      freeAtoms (Atom _) = Set.empty
+      freeAtoms (Abstraction a b) = Set.union (freeAtoms a) (freeAtoms b)
+      freeAtoms (FreeVariable _) = Set.empty
 
 closeType' :: [Integer] -> Type -> QualifiedType
 closeType' ftv tt = ForAll vars tt' where
@@ -229,6 +239,12 @@ inferE e = fst <$> inferE' e
 
 inferD :: Declaration -> TCM Type
 inferD d = fst <$> inferD' d
+
+inferExpType :: Exp -> TCM QualifiedType
+inferExpType e = closeType <$> inferE e
+
+inferDeclType :: Declaration -> TCM QualifiedType
+inferDeclType d = closeType <$> inferD d
 
 evalInfer :: TCM a -> Either (WithContext TypeError) a
 evalInfer m = runReaderT (evalStateT m emptyTcState) emptyEnv

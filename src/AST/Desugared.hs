@@ -30,6 +30,9 @@ data Declaration
 -- type of functions is the type of the whole function in contrast to just return type that was the case in Abstract Syntax
 -- TODO values may be 0-arg functions, but evaluation should be lazy then
 
+declarationName :: Declaration -> String
+declarationName (Function name _ _ _) = name
+
 data DataTypeCase = DataTypeCase Ident [Type] deriving Show
 
 -- newtype Arg = Argument Ident -- TODO default values are discarded for now

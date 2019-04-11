@@ -8,6 +8,8 @@ import Passes.Desugar
 import Passes.TypeCheck
 import AST.Desugared
 import Builtins
+import Interpreter
+import AppCommon
 
 import System.Console.Repline
 import System.Exit ( exitFailure, exitSuccess )
@@ -16,12 +18,16 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 import Data.List
 
-data RState = RState { rsTypeEnv :: [Declaration] }
+
+data RState = RState { rsTypeEnv :: [Declaration], rsVarEnv :: Env, rsMem :: Memory }
 
 makeInitialState :: IO RState
 makeInitialState = do
   builtins <- loadBuiltinDecls
-  return $ RState builtins
+  case execInterpreter emptyEnv emptyMemory builtinsEnv of
+    Right (env, mem) ->
+      return $ RState builtins env mem
+    Left e -> error $ "Fatal error, cannot initialie builtins: " ++ e
 
 type Repl = HaskelineT (StateT RState IO)
 
@@ -36,13 +42,42 @@ parseDecl str = desugarDeclaration <$> parse Par.pDeclaration str
 parseExp :: String -> Either String Exp
 parseExp str = desugarExpression <$> parse Par.pExp str
 
+parseExpOrDecl :: String -> Either String (Either Declaration Exp)
+parseExpOrDecl str = case (parse Par.pDeclaration str, parse Par.pExp str) of
+  (Right d, Left _) -> return $ Left $ desugarDeclaration d
+  (Left _, Right e) -> return $ Right $ desugarExpression e
+  (Right _, Right _) -> throwError $ "Ambiguous parse: cannot discern expression from declaration"
+  (Left e, Left d) -> throwError $ e ++ "\n/\n" ++ d
+
 showingError :: Show e => Either e a -> Either String a
 showingError (Right a) = Right a
 showingError (Left e) = Left $ show e
 
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()
-cmd input = liftIO $ print input
+cmd input = do
+  RState tenv env mem <- get
+  case parseExpOrDecl input of
+    Left err -> liftIO $ putStrLn $ "Parse error: " ++ err
+    Right (Left decl@(Function name args _ body)) ->
+      case evalInfer $ withTopLevelDecls tenv $ inferDeclType decl of
+        Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
+        Right ttype ->
+          case execInterpreter env mem (processDefinition env decl) of
+            Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
+            Right (env', mem') -> do
+              let decl' = Function name args (Just ttype) body
+              modify (\_ -> RState (decl' : tenv) env' mem')
+              liftIO $ putStrLn $ (declarationName decl) ++ " defined"
+    Right (Right exp) ->
+      case evalInfer $ withTopLevelDecls tenv $ inferExpType exp of
+        Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
+        Right _ -> case execInterpreter env mem (interpret exp) of
+          Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
+          Right (res, mem') -> do
+            modify (\s -> s { rsMem = mem' })
+            liftIO $ print res
+  return ()
 
 completer :: (Monad m, MonadState RState m) => WordCompleter m
 completer n = do
@@ -77,7 +112,7 @@ quit :: [String] -> Repl ()
 quit _ = liftIO $ exitSuccess
 
 ini :: Repl ()
-ini = liftIO $ putStrLn "Welcome to Quartz REPL!"
+ini = liftIO $ putStrLn "Welcome to the Quartz REPL!"
 
 runRepl :: IO ()
 runRepl = do
