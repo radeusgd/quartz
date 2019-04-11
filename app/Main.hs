@@ -27,19 +27,7 @@ import Data.Text.Prettyprint.Doc as Pretty
 import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
 import Repl
-
-parseFile' :: String -> IO (Err [Abs.Declaration])
-parseFile' fname = do
-  fd <- openFile fname ReadMode
-  contents <- hGetContents fd
-  let toks = myLexer contents
-  return $ (\(Abs.Prog decls) -> decls) <$> pProgram toks
-
-parseFile :: String -> IO (Err [Declaration])
-parseFile fname = do
-  raw <- parseFile' fname
-  return $ (map desugarDeclaration) <$> raw
-
+import AppCommon
 
 handleSyntaxError :: Err a -> IO a
 handleSyntaxError (Bad err) = putStrLn ("Syntax error: " ++ err) >> exitFailure

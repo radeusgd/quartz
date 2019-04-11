@@ -53,37 +53,46 @@ showingError :: Show e => Either e a -> Either String a
 showingError (Right a) = Right a
 showingError (Left e) = Left $ show e
 
+runDecl :: Declaration -> Repl ()
+runDecl decl@(Function name args _ body) = do
+  RState tenv env mem <- get
+  case evalInfer $ withTopLevelDecls tenv $ inferDeclType decl of
+    Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
+    Right ttype ->
+      case execInterpreter env mem (processDefinition env decl) of
+        Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
+        Right (env', mem') -> do
+          let decl' = Function name args (Just ttype) body
+          modify (\_ -> RState (decl' : tenv) env' mem')
+          liftIO $ putStrLn $ (declarationName decl) ++ " defined"
+
+runExp :: Exp -> Repl ()
+runExp exp = do
+  RState tenv env mem <- get
+  case evalInfer $ withTopLevelDecls tenv $ inferExpType exp of
+    Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
+    Right _ -> case execInterpreter env mem (interpret exp >>= force) of
+      Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
+      Right (res, mem') -> do
+        modify (\s -> s { rsMem = mem' })
+        liftIO $ print res
+
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()
 cmd input = do
-  RState tenv env mem <- get
   case parseExpOrDecl input of
     Left err -> liftIO $ putStrLn $ "Parse error: " ++ err
-    Right (Left decl@(Function name args _ body)) ->
-      case evalInfer $ withTopLevelDecls tenv $ inferDeclType decl of
-        Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-        Right ttype ->
-          case execInterpreter env mem (processDefinition env decl) of
-            Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
-            Right (env', mem') -> do
-              let decl' = Function name args (Just ttype) body
-              modify (\_ -> RState (decl' : tenv) env' mem')
-              liftIO $ putStrLn $ (declarationName decl) ++ " defined"
-    Right (Right exp) ->
-      case evalInfer $ withTopLevelDecls tenv $ inferExpType exp of
-        Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-        Right _ -> case execInterpreter env mem (interpret exp >>= force) of
-          Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
-          Right (res, mem') -> do
-            modify (\s -> s { rsMem = mem' })
-            liftIO $ print res
+    Right (Left decl) -> runDecl decl
+    Right (Right exp) -> runExp exp
   return ()
 
-completer :: (Monad m, MonadState RState m) => WordCompleter m
-completer n = do
+completer = Prefix (wordCompleter complete) [(":load", fileCompleter)]
+
+complete :: (Monad m, MonadState RState m) => WordCompleter m
+complete n = let cmds = map ((':':) . fst) options in do
   tenv <- gets rsTypeEnv
   let names = map getName tenv
-  return $ filter (isPrefixOf n) names
+  return $ filter (isPrefixOf n) (names ++ cmds)
   where
     getName (Function name _ _ _) = name
 
@@ -102,10 +111,19 @@ typeof args = do
         Left err -> liftIO $ putStrLn $ "Error: " ++ err
         Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t
 
+loadFile :: [String] -> Repl ()
+loadFile args = do
+  parsed <- liftIO $ parseFile (unwords args)
+  case parsed of
+    ParErr.Bad e -> liftIO $ putStrLn $ "Syntax error: " ++ e
+    ParErr.Ok decls -> do
+      mapM_ runDecl decls
+
 options :: [(String, [String] -> Repl ())]
 options = [
     ("t", typeof),
-    ("q", quit)
+    ("q", quit),
+    ("load", loadFile)
   ]
 
 quit :: [String] -> Repl ()
@@ -117,4 +135,4 @@ ini = liftIO $ putStrLn "Welcome to the Quartz REPL!"
 runRepl :: IO ()
 runRepl = do
   initState <- makeInitialState
-  evalStateT (evalRepl "$> " cmd options (Word completer) ini) initState
+  evalStateT (evalRepl "$> " cmd options completer ini) initState
