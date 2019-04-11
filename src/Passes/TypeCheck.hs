@@ -244,7 +244,10 @@ inferExpType :: Exp -> TCM QualifiedType
 inferExpType e = closeType <$> inferE e
 
 inferDeclType :: Declaration -> TCM QualifiedType
-inferDeclType d = closeType <$> inferD d
+inferDeclType d = closeType <$> withItself d (inferD d) where
+  withItself :: Declaration -> TCM a -> TCM a
+  withItself (Function _ _ Nothing _) m = m
+  withItself (Function name _ (Just ttype) _) m = withVar name ttype m
 
 evalInfer :: TCM a -> Either (WithContext TypeError) a
 evalInfer m = runReaderT (evalStateT m emptyTcState) emptyEnv

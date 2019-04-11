@@ -72,7 +72,7 @@ cmd input = do
     Right (Right exp) ->
       case evalInfer $ withTopLevelDecls tenv $ inferExpType exp of
         Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-        Right _ -> case execInterpreter env mem (interpret exp) of
+        Right _ -> case execInterpreter env mem (interpret exp >>= force) of
           Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
           Right (res, mem') -> do
             modify (\s -> s { rsMem = mem' })

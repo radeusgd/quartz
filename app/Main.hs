@@ -40,67 +40,10 @@ parseFile fname = do
   raw <- parseFile' fname
   return $ (map desugarDeclaration) <$> raw
 
--- runRepl :: IO ()
--- runRepl = do
---   putStrLn "Welcome to Quartz REPL."
---   let tenv = makeTypeEnv builtins
---   (env, mem) <-
---         case execInterpreter emptyEnv emptyMemory (foldM register emptyEnv builtins) of
---           Left err -> (putStrLn $ show err) >> exitFailure
---           Right r -> return r
---   repl' tenv env mem
---   where
---     repl' :: Passes.TypeCheck.Env -> Interpreter.Env -> Interpreter.Memory -> IO ()
---     repl' tenv env mem = do
---       putStr "$> " >> hFlush stdout
---       done <- isEOF
---       if done then putStrLn "Quitting REPL..."
---       else do
---         line <- getLine
---         let toks = myLexer line
---         let decl = pDeclaration toks
---         let exp = pExp toks
---         case (decl, exp) of
---            (Bad de, Bad ee) -> putStrLn "Parse error:" >> print de >> print ee >> repl' tenv env mem
---            (Ok _, Ok _) -> putStrLn "Parsed both a declaration and an expression (how is this even possible?), don't know how to handle this." >> repl' tenv env mem
---            (Bad _, Ok e) -> runExp e tenv env mem
---            (Ok d, Bad _) -> runDecl d tenv env mem
---         exitSuccess
---     runDecl :: Abs.Declaration -> Passes.TypeCheck.Env -> Interpreter.Env -> Interpreter.Memory -> IO ()
---     runDecl decl tenv env mem = do
---       let desugared = desugarDeclaration decl
---       let embedded = embedDeclaration desugared
---       case introduceTopLevelTypes [embedded] tenv of
---          Left err -> (putStrLn $ "Type error: " ++ show err) >> repl' tenv env mem
---          Right tenv' -> do
---             let typed = checkDeclaration tenv' embedded
---             case typed of
---               Left err -> (putStrLn $ "Type error: " ++ show err) >> repl' tenv env mem
---               Right def ->
---                 case execInterpreter env mem (processDefinition env def) of
---                   Left err -> (putStrLn $ "Runtime error: " ++ show err) >> repl' tenv env mem
---                   Right (env', mem') -> putStrLn ("Defined: " ++ Typed.declarationName def) >> repl' tenv' env' mem'
---     runExp :: Abs.Exp -> Passes.TypeCheck.Env -> Interpreter.Env -> Interpreter.Memory -> IO ()
---     runExp exp tenv env mem = do
---       let desugared = desugarExpression exp
---       let embedded = embedExp desugared
---       let typed = checkExpression tenv embedded
---       -- Debugging
---       -- _ <- evaluate $ execInterpreter env mem (traceEnv env)
---       -- End of debugging
---       case typed of
---          Left err -> (putStrLn $ "Type error: " ++ show err) >> repl' tenv env mem
---          Right e ->
---           case execInterpreter env mem (interpret e) of
---             Left err -> (putStrLn $ "Runtime error: " ++ show err) >> repl' tenv env mem
---             Right (res, mem') -> putStrLn (show res) >> repl' tenv env mem'
 
 handleSyntaxError :: Err a -> IO a
 handleSyntaxError (Bad err) = putStrLn ("Syntax error: " ++ err) >> exitFailure
 handleSyntaxError (Ok a) = return a
-
--- initialTypingEnv :: Passes.TypeCheck.Env
--- initialTypingEnv = makeTypeEnv builtins
 
 groupEithers :: [Either e a] -> ([e], [a])
 groupEithers [] = ([], [])
@@ -147,7 +90,7 @@ runExtract fname = do
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
 runMain :: [Declaration] -> Either Interpreter.ErrorType Interpreter.Value
-runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main")
+runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main") >>= force
 
 runRun :: String -> IO ()
 runRun fname = do

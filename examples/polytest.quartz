@@ -1,0 +1,4 @@
+def f[a](x: Int, a: a): a = {
+    val g = \y -> x + y;
+    g a
+};

@@ -29,9 +29,10 @@ loadBuiltinDecls = do
 register :: Env -> (String, Value) -> Interpreter Env
 register env (name, v) = do
   loc <- alloc
-  setValue loc v
+  setValueEager loc v
   return $ bind name loc env
 
+-- TODO make sure all builtins have respective declarations and vice versa
 builtinsEnv :: Interpreter Env
 builtinsEnv = do
   env <- ask
@@ -49,22 +50,39 @@ withBuiltins m = do
 -- import qualified Interpreter as I
 -- import Control.Monad.Reader
 
+make1ArgFunLazy :: (LazyValue -> Interpreter LazyValue) -> Value
+make1ArgFunLazy f = VFunction "x" emptyEnv $ do
+  x <- readVarLazy "x"
+  f x
+
+make2ArgFunLazy :: (LazyValue -> LazyValue -> Interpreter LazyValue) -> Value
+make2ArgFunLazy f = VFunction "x" emptyEnv $ do
+  x <- readVarLazy "x"
+  makeLazy $ return $ VFunction "y" emptyEnv $ do
+    y <- readVarLazy "y"
+    f x y
+
+make3ArgFunLazy :: (LazyValue -> LazyValue -> LazyValue -> Interpreter LazyValue) -> Value
+make3ArgFunLazy f = VFunction "z" emptyEnv $ do
+  z <- readVarLazy "z"
+  makeLazy $ return $ make2ArgFunLazy (f z)
+
 make1ArgFun :: (Value -> Value) -> Value
 make1ArgFun f = VFunction "x" emptyEnv $ do
   x <- readVar "x"
-  return $ f x
+  makeLazy $ return $ f x
 
 make2ArgFun :: (Value -> Value -> Value) -> Value
 make2ArgFun f = VFunction "x" emptyEnv $ do
   x <- readVar "x"
-  return $ VFunction "y" emptyEnv $ do
+  makeLazy $ return $ VFunction "y" emptyEnv $ do
     y <- readVar "y"
-    return $ f x y
+    makeLazy $ return $ f x y
 
 make3ArgFun :: (Value -> Value -> Value -> Value) -> Value
 make3ArgFun f = VFunction "z" emptyEnv $ do
   z <- readVar "z"
-  return $ make2ArgFun (f z)
+  makeLazy $ return $ make2ArgFun (f z)
 
 builtins :: [(String, Value)]
 builtins = [
@@ -75,7 +93,7 @@ builtins = [
   ("/", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x `div` y)),
   ("<+>", (make2ArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b)),
   ("==", make2ArgFun $ \x -> \y -> VBool $ x == y),
-  ("if_then_else", (make3ArgFun $ \(VBool x) -> \tt -> \ff -> if x then tt else ff)),
+  ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do (VBool x) <- force cond; return $ if x then tt else ff)),
   ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg)
            ]
 
