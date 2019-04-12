@@ -17,16 +17,20 @@ import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import Data.List
+import qualified Data.Map as Map
 
 
-data RState = RState { rsTypeEnv :: [Declaration], rsVarEnv :: Env, rsMem :: Memory }
+data RState = RState { rsTypeEnv :: TypeEnv, rsVarEnv :: Env, rsMem :: Memory }
 
 makeInitialState :: IO RState
 makeInitialState = do
   builtins <- loadBuiltinDecls
+  let tenv = case evalInfer $ extendEnvironment emptyTypeEnv builtins of
+               Right env -> env
+               Left e -> error $ "Fatal error, cannot typecheck builtins: " ++ show e
   case execInterpreter emptyEnv emptyMemory builtinsEnv of
     Right (env, mem) ->
-      return $ RState builtins env mem
+      return $ RState tenv env mem
     Left e -> error $ "Fatal error, cannot initialie builtins: " ++ e
 
 type Repl = HaskelineT (StateT RState IO)
@@ -56,20 +60,19 @@ showingError (Left e) = Left $ show e
 runDecl :: Declaration -> Repl ()
 runDecl decl@(Function name args _ body) = do
   RState tenv env mem <- get
-  case evalInfer $ withTopLevelDecls tenv $ inferDeclType decl of
+  case evalInfer $ extendEnvironment tenv [decl] of
     Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-    Right ttype ->
+    Right tenv' ->
       case execInterpreter env mem (processDefinition env decl) of
         Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
         Right (env', mem') -> do
-          let decl' = Function name args (Just ttype) body
-          modify (\_ -> RState (decl' : tenv) env' mem')
+          modify (\_ -> RState tenv' env' mem')
           liftIO $ putStrLn $ (declarationName decl) ++ " defined"
 
 runExp :: Exp -> Repl ()
 runExp exp = do
   RState tenv env mem <- get
-  case evalInfer $ withTopLevelDecls tenv $ inferExpType exp of
+  case evalInfer $ withEnvironment tenv $ inferExpType exp of
     Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
     Right _ -> case execInterpreter env mem (interpret exp >>= force) of
       Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
@@ -91,7 +94,7 @@ completer = Prefix (wordCompleter complete) [(":load", fileCompleter)]
 complete :: (Monad m, MonadState RState m) => WordCompleter m
 complete n = let cmds = map ((':':) . fst) options in do
   tenv <- gets rsTypeEnv
-  let names = map getName tenv
+  let names = Map.keys tenv
   return $ filter (isPrefixOf n) (names ++ cmds)
   where
     getName (Function name _ _ _) = name
@@ -106,7 +109,7 @@ typeof args = do
   case exp of
     Left err -> liftIO $ putStrLn $ "Error: " ++ err
     Right exp ->
-      let t = showingError $ inferType $ withTopLevelDecls tenv $ inferE exp in
+      let t = showingError $ inferType $ withEnvironment tenv $ inferE exp in
       case t of
         Left err -> liftIO $ putStrLn $ "Error: " ++ err
         Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t

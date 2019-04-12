@@ -1,12 +1,16 @@
 module Passes.TypeCheck(
   typeCheckTopLevel,
-  withTopLevelDecls,
+  withTopLevelDecls, -- TODO consider deprecating these
   inferType,
   inferDeclType,
   inferExpType,
   inferE,
   inferD,
-  evalInfer
+  evalInfer,
+  extendEnvironment,
+  withEnvironment,
+  TypeEnv,
+  emptyTypeEnv
                        ) where
 
 import Control.Monad.Reader
@@ -43,7 +47,11 @@ instance Show TypeError where
 instance Show a => Show (WithContext a) where
   show (WithContext a ctx) = show a ++ " in " ++ ctx
 
-data Env = Env { eBindings :: M.Map Ident QualifiedType, eCtx :: String }
+type TypeEnv = M.Map Ident QualifiedType
+emptyTypeEnv :: TypeEnv
+emptyTypeEnv = M.empty
+
+data Env = Env { eBindings :: TypeEnv, eCtx :: String }
 
 emptyEnv :: Env
 emptyEnv = Env M.empty "???"
@@ -264,3 +272,9 @@ inferType m = head <$> inferTypes ((:[]) <$> m)
 typeCheckTopLevel :: [Declaration] -> TCM ()
 typeCheckTopLevel decls =
   withTopLevelDecls decls (mapM_ inferD' decls)
+
+extendEnvironment :: TypeEnv -> [Declaration] -> TCM TypeEnv
+extendEnvironment e decls = withEnvironment e $ withTopLevelDecls decls $ asks eBindings
+
+withEnvironment :: TypeEnv -> TCM a -> TCM a
+withEnvironment te = local (\_ -> Env te "???")

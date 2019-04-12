@@ -8,4 +8,4 @@ aaa
 
 def not(x: Bool): Bool = if x then false else true;
 
-def main(): Int = dec 4 2;
+def main(): String = toString (dec 4 2);

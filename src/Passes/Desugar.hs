@@ -74,7 +74,7 @@ desugarDeclaration (A.Value (QIdent (_, name)) rettype exp) = -- treat values as
 desugarDeclaration (A.ValueInferred (QIdent (_, name)) exp) = -- treat values as 0-arg functions
   desugarFunction name [] [] Nothing exp
 desugarDeclaration (A.Import (QIdent (_, name))) = error "TODO" --D.Import name
-desugarDeclaration (A.Data (QIdent (_, typename)) args cases) = error "TODO" -- D.DataType typename (map desugarDataCase cases) -- TODO
+desugarDeclaration (A.Data (QIdent (_, typename)) args cases) = D.DataType typename (map desugarDataCase cases)
   where
     desugarDataCase (A.DataConstructor (QIdent (_, name)) types) = D.DataTypeCase name (map desugarType types)
 
