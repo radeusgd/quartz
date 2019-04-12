@@ -58,7 +58,7 @@ showingError (Right a) = Right a
 showingError (Left e) = Left $ show e
 
 runDecl :: Declaration -> Repl ()
-runDecl decl@(Function name args _ body) = do
+runDecl decl = do
   RState tenv env mem <- get
   case evalInfer $ extendEnvironment tenv [decl] of
     Left err -> liftIO $ putStrLn $ "Type error: " ++ show err

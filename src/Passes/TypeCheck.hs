@@ -2,10 +2,8 @@ module Passes.TypeCheck(
   typeCheckTopLevel,
   withTopLevelDecls, -- TODO consider deprecating these
   inferType,
-  inferDeclType,
   inferExpType,
   inferE,
-  inferD,
   evalInfer,
   extendEnvironment,
   withEnvironment,
@@ -20,7 +18,7 @@ import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.Maybe
 
--- import Debug.Trace
+import Debug.Trace
 
 import AST.Desugared
 
@@ -42,7 +40,7 @@ instance Show TypeError where
   show (OccursCheck a b) = "Type " ++ show a ++ " is part of " ++ show b ++ ", so they cannot be unified"
   show (TypeMismatch a b) = "Cannot unify " ++ show a ++ " with " ++ show b
   show (Other s) = "Other error: " ++ s
-  show _ = "TODO unknown error"
+  show (TopLevelTypeNotSpecified s) = "Top level definition " ++ s ++ " missing type signature"
 
 instance Show a => Show (WithContext a) where
   show (WithContext a ctx) = show a ++ " in " ++ ctx
@@ -51,10 +49,10 @@ type TypeEnv = M.Map Ident QualifiedType
 emptyTypeEnv :: TypeEnv
 emptyTypeEnv = M.empty
 
-data Env = Env { eBindings :: TypeEnv, eCtx :: String }
+data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFree :: Set.Set Integer, eFreeAtoms :: Set.Set Ident }
 
 emptyEnv :: Env
-emptyEnv = Env M.empty "???"
+emptyEnv = Env M.empty "???" Set.empty Set.empty
 
 type Subst = M.Map Integer Type
 type TCM a = StateT TcState (ReaderT Env (Either (WithContext TypeError))) a
@@ -95,7 +93,7 @@ readVar = readVar' >=> instantiate
 withVar :: Ident -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
   introduceType :: Ident -> QualifiedType -> Env -> Env
-  introduceType i qt@(ForAll _ tt) (Env b ctx) = Env (M.insert i qt b) ctx -- not sure if I shouldn't add free variables of tt to Env here?
+  introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (M.insert i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
 
 emptySubst :: Subst
 emptySubst = M.empty
@@ -108,8 +106,8 @@ compose sa sb = M.union (M.map (substitute sa) sb) (M.map (substitute sb) sa)
 
 bindVar :: Integer -> Type -> TCM Subst
 bindVar i t =
-  if Set.member i (freeTypeVariables t) then throwErrorWithContext $ OccursCheck (FreeVariable i) t
-  else if t == FreeVariable i then return emptySubst -- same variable so no need to make a substitution
+  if t == FreeVariable i then return emptySubst -- same variable so no need to make a substitution
+  else if Set.member i (freeTypeVariables t) then throwErrorWithContext $ OccursCheck (FreeVariable i) t
   else return $ M.singleton i t
 
 noSubst :: TCM a -> TCM (a, Subst)
@@ -141,10 +139,21 @@ substituteAtoms m a@(Atom i) = case M.lookup i m of
 substituteAtoms m (Abstraction a b) = Abstraction (substituteAtoms m a) (substituteAtoms m b)
 substituteAtoms m fp@(FreeVariable _) = fp
 
+withFreeAtoms :: [Ident] -> TCM a -> TCM a
+withFreeAtoms atoms m = local (\s -> s { eFreeAtoms = eFreeAtoms s `Set.union` Set.fromList atoms }) m
+
 generalize :: Type -> TCM QualifiedType
 generalize tt = do
+  freeAts <- asks eFreeAtoms
   let ftv = Set.toList $ freeTypeVariables tt
-  return $ closeType' ftv tt
+  let (ForAll vars tt') = closeType' ftv tt
+  let freeAtoms = freeAts `Set.intersection` allAtoms tt'
+  let allVars = freeAtoms `Set.union` Set.fromList vars
+  return $ ForAll (Set.toList allVars) tt'
+  where
+    allAtoms (Atom a) = Set.singleton a
+    allAtoms (Abstraction a b) = allAtoms a `Set.union` allAtoms b
+    allAtoms (FreeVariable _) = Set.empty
 
 -- TODO also caonicalize free variable names to a,b,c,...,'1,'2,...
 closeType :: Type -> QualifiedType
@@ -200,25 +209,18 @@ buildLambda :: [Ident] -> Exp -> Exp
 buildLambda [] e = e
 buildLambda (a:t) e = ELambda a (buildLambda t e)
 
-inferD' :: Declaration -> TCM (Type, Subst)
-inferD' (Function name args usertype e) = inContext name $ do
-  (ttype, s) <- inferE' $ buildLambda args e
-  case usertype of
-    Nothing -> return (ttype, s)
-    -- make sure user specified type fits with inferred
-    Just tt -> do
-      tt' <- instantiateRigid tt
-      s' <- unify ttype tt'
-      return (substitute s' ttype, s <#> s')
+-- inferFunction :: Declaration -> TCM (Type, Subst)
+-- inferFunction (Function name args usertype e) = 
 
 inferE' :: Exp -> TCM (Type, Subst)
 inferE' (EApplication f arg) = do
   (f', sf) <- inferE' f
   (arg', sa) <- inferE' arg
   res <- freshFreeType
+  traceShowM ("app", f', arg')
   s <- unify f' (Abstraction arg' res)
   return (substitute s res, sf <#> sa <#> s)
-inferE' (EVar v) = noSubst $ readVar v
+inferE' (EVar v) = noSubst $ do t <- readVar v; traceShowM ("var", v, t); return t
 inferE' (EConst c) = noSubst $ literalType c
 inferE' (ELambda x e) = do
   xt <- freshFreeType
@@ -226,13 +228,60 @@ inferE' (ELambda x e) = do
   return $ (Abstraction (substitute s xt) (substitute s et), s)
 inferE' (EBlock decls e) = inferBlock decls e
 
+withDeclaration :: Declaration -> TCM a -> TCM a
+withDeclaration d m = fst <$> withDeclaration' d m
+
+freeAtomsQT :: M.Map Ident Type -> QualifiedType -> QualifiedType
+freeAtomsQT m (ForAll vars tt) =
+  let m' = foldr (M.delete) m vars in
+    ForAll vars (substituteAtoms m' tt)
+
+freeAtomsD :: M.Map Ident Type -> Declaration -> Declaration
+freeAtomsD m (Function name args maytype body) = Function name args (freeAtomsQT m <$> maytype) (freeAtomsE m body)
+freeAtomsD m (DataType _ _) = error "TODO"
+
+freeAtomsE :: M.Map Ident Type -> Exp -> Exp
+freeAtomsE m (EApplication a b) = EApplication (freeAtomsE m a) (freeAtomsE m b)
+freeAtomsE m (ELambda x e) = ELambda x (freeAtomsE m e)
+freeAtomsE m (EBlock decls e) = EBlock (map (freeAtomsD m) decls) (freeAtomsE m e)
+freeAtomsE m v@(EVar _) = v
+freeAtomsE m c@(EConst _) = c
+
+freeTheAtoms :: [Ident] -> Exp -> TCM Exp
+freeTheAtoms atoms exp = do
+  subst <- mapM (\i -> do t <- freshFreeType; return (i, t)) atoms
+  return $ freeAtomsE (M.fromList subst) exp
+
+withDeclaration' :: Declaration -> TCM a -> TCM (a, Subst)
+withDeclaration' (Function name args usertype body) m = do
+  body' <- case usertype of
+    Nothing -> return body
+    Just (ForAll vars _) -> freeTheAtoms vars body
+  (ttype, subst) <- inferred body'
+  let qtype = closeType ttype
+  -- qtype <- generalize ttype
+  traceShowM ("withdecl", name, ttype, qtype)
+  res <- withVar name qtype $ m
+  return (res, subst)
+  where inferred body =
+          inContext name $ do
+          (ttype, s) <- inferE' $ buildLambda args body
+          case usertype of
+            Nothing -> return (ttype, s)
+              -- make sure user specified type fits with inferred
+            Just tt@(ForAll vars _) -> do
+              tt' <- instantiateRigid tt
+              s' <- unify ttype tt'
+              let ts = substitute s' ttype
+              return (ts, s <#> s')
+
+withDeclaration' _ _ = error "TODO withDeclaration'"
+
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e
-inferBlock (d@(Function name _ _ _) : tail) e = do
-  (declt, ss) <- inferD' d
-  d' <- generalize declt
-  (bl, sb) <- withVar name d' $ inferBlock tail e
-  return (bl, sb <#> ss)
+inferBlock (d : tail) e = do
+  ((bl, s1), s2) <- withDeclaration' d $ inferBlock tail e
+  return (substitute s2 bl, s1 <#> s2)
 
 literalType :: Literal -> TCM Type
 literalType (LStr _) = return $ Atom "String"
@@ -245,17 +294,8 @@ literalType (LError _) = freshFreeType
 inferE :: Exp -> TCM Type
 inferE e = fst <$> inferE' e
 
-inferD :: Declaration -> TCM Type
-inferD d = fst <$> inferD' d
-
 inferExpType :: Exp -> TCM QualifiedType
 inferExpType e = closeType <$> inferE e
-
-inferDeclType :: Declaration -> TCM QualifiedType
-inferDeclType d = closeType <$> withItself d (inferD d) where
-  withItself :: Declaration -> TCM a -> TCM a
-  withItself (Function _ _ Nothing _) m = m
-  withItself (Function name _ (Just ttype) _) m = withVar name ttype m
 
 evalInfer :: TCM a -> Either (WithContext TypeError) a
 evalInfer m = runReaderT (evalStateT m emptyTcState) emptyEnv
@@ -271,10 +311,10 @@ inferType m = head <$> inferTypes ((:[]) <$> m)
 
 typeCheckTopLevel :: [Declaration] -> TCM ()
 typeCheckTopLevel decls =
-  withTopLevelDecls decls (mapM_ inferD' decls)
+  withTopLevelDecls decls (inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
 
 extendEnvironment :: TypeEnv -> [Declaration] -> TCM TypeEnv
-extendEnvironment e decls = withEnvironment e $ withTopLevelDecls decls $ asks eBindings
+extendEnvironment e decls = withEnvironment e $ withTopLevelDecls decls $ typeCheckTopLevel decls >> asks eBindings
 
 withEnvironment :: TypeEnv -> TCM a -> TCM a
-withEnvironment te = local (\_ -> Env te "???")
+withEnvironment te = local (\_ -> Env te "???" Set.empty Set.empty)

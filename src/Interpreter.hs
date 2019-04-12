@@ -20,6 +20,7 @@ data Value
   | VBool Bool
   -- function: argname, definition_environemnt (my closure), computation
   | VFunction String Env (Interpreter LazyValue)
+  | VDataType Ident [Value] -- right now datatypes are strict (so forcing an instance of a datatpye forces all of it's arguments), this disallows infinite lists for example
 
 instance Show Value where
   show (VStr s) = show s
@@ -33,6 +34,10 @@ type ErrorType = String
 type Loc = Int
 data Env = Env { vars :: Map String Loc }
 data Thunk = ThunkLazy LazyValue | ThunkComputed Value
+instance Show Thunk where
+  show (ThunkLazy _) = "[unevaluated thunk]"
+  show (ThunkComputed v) = show v
+
 data Memory = Memory { locs :: Map Loc Thunk, maxloc :: Loc }
 
 type InState = StateT Memory (ExceptT ErrorType Identity)
