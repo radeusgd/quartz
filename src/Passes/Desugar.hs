@@ -5,6 +5,7 @@ module Passes.Desugar(
                     ) where
 
 import Data.Maybe
+-- import Data.String.Utils
 import Quartz.Syntax.AbsQuartz as A
 import AST.Desugared as D
 
@@ -29,7 +30,9 @@ desugarExpression (A.EMul a b) =
 desugarExpression (A.EDiv a b) =
   desugarExpression (A.ECustomOp a (CustomOperator "/") b)
 desugarExpression (A.EVar (QIdent (_, v))) = D.EVar v
-desugarExpression (A.EStr s) = D.EConst $ LStr s
+desugarExpression (A.EStr s) = D.EConst $ LStr s where
+  -- desugarStringLiteral str = replaceAll [("\\n", "\n"), ("\\\\", "\\"), ("\\\"", "\""), ("\\t", "\t")] str
+  -- replaceAll reps str = foldr (uncurry replace) str reps
 desugarExpression (A.EInt i) = D.EConst $ LInt i
 desugarExpression (A.ENegInt i) = D.EConst $ LInt (-i)
 desugarExpression (A.EDouble d) = D.EConst $ LDouble d
@@ -54,11 +57,14 @@ desugarQIdent (QIdent (_, i)) = i
 desugarCase :: A.Case -> D.ECase
 desugarCase (A.SimpleCase name args e) = D.ECase (desugarQIdent name) (map desugarQIdent args) (desugarExpression e)
 
--- TODO the typing pass may need to use some Reader or State to keep track of fresh variables once we add better inference
 desugarType :: A.Type -> D.Type
 desugarType (A.Atom (QIdent (_, name))) = D.Atom name
 desugarType A.UnitAtom = D.Atom "()"
-desugarType (A.Constructor (QIdent (_, name)) args) = if null args then D.Atom name else error "TODO parametric datatypes" -- -- TODO FIXME constructor args support!!!
+desugarType (A.Constructor (QIdent (_, name)) args) =
+  desugarConstructor (D.Atom name) (map desugarType args)
+  where
+    desugarConstructor tt [] = tt
+    desugarConstructor tt (h:t) = desugarConstructor (D.Construction tt h) t
 desugarType (A.Abstraction ta tb) = D.Abstraction (desugarType ta) (desugarType tb)
 
 -- returns type of a functions with given list of arguments and return value
@@ -85,7 +91,7 @@ desugarDeclaration (A.Value (QIdent (_, name)) rettype exp) = -- treat values as
 desugarDeclaration (A.ValueInferred (QIdent (_, name)) exp) = -- treat values as 0-arg functions
   desugarFunction name [] [] Nothing exp
 desugarDeclaration (A.Import (QIdent (_, name))) = error "TODO" --D.Import name
-desugarDeclaration (A.Data (QIdent (_, typename)) args cases) = D.DataType typename (map desugarDataCase cases)
+desugarDeclaration (A.Data (QIdent (_, typename)) typeargs cases) = D.DataType typename (map desugarQIdent typeargs) (map desugarDataCase cases)
   where
     desugarDataCase (A.DataConstructor (QIdent (_, name)) types) = D.DataTypeCase name (map desugarType types)
 

@@ -42,7 +42,7 @@ coercions Type 2 ;
 
 EApp. Exp1 ::= Exp Exp2 ;
 ECustomOp. Exp1 ::= Exp1 CustomOperator Exp2 ;
-EIfThenElse. Exp1 ::= "if" Exp2 "then" Exp2 "else" Exp2 ;
+EIfThenElse. Exp1 ::= "if" Exp1 "then" Exp2 "else" Exp2 ;
 ELambda. Exp1 ::= "\\" QIdent "->" Exp2 ;
 EAdd. Exp2 ::= Exp2 "+" Exp3 ;
 ESub. Exp2 ::= Exp2 "-" Exp3 ;

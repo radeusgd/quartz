@@ -27,6 +27,7 @@ dependencies:
 - containers
 - union-find
 - repline
+- MissingH
 
 library:
   source-dirs: src

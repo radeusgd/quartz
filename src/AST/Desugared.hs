@@ -17,6 +17,7 @@ data Literal
 data Type
   = Atom Ident
   | Abstraction Type Type
+  | Construction Type Type
   | FreeVariable Integer
   deriving Eq
 
@@ -25,7 +26,7 @@ data QualifiedType = ForAll [Ident] Type
 data Declaration
   = Function Ident [Ident] (Maybe QualifiedType) Exp
 --  | Import String
-  | DataType Ident [DataTypeCase]
+  | DataType Ident [Ident] [DataTypeCase]
   deriving Show
 -- type of functions is the type of the whole function in contrast to just return type that was the case in Abstract Syntax
 -- TODO values may be 0-arg functions, but evaluation should be lazy then
@@ -34,7 +35,7 @@ data DataTypeCase = DataTypeCase Ident [Type] deriving Show
 
 declarationName :: Declaration -> String
 declarationName (Function name _ _ _) = name
-declarationName (DataType name _) = name
+declarationName (DataType name _ _) = name
 
 -- newtype Arg = Argument Ident -- TODO default values are discarded for now
 --   deriving Show
@@ -62,6 +63,7 @@ instance Pretty Type where
   pretty (Atom ident) = pretty ident
   pretty (Abstraction a b) = parens $ (pretty a) <+> "->" <+> (pretty b)
   pretty (FreeVariable i) = "'" <> pretty i
+  pretty (Construction a b) = parens $ pretty a <+> pretty b
 
 instance Show Type where
   show = renderString . layoutSmart defaultLayoutOptions . pretty
@@ -81,7 +83,7 @@ instance Pretty QualifiedType where
 instance Pretty Declaration where
   pretty (Function name args ttype exp) = "def" <+> pretty name <+> parens (pretty args) <+> ":" <+> pretty ttype <+> "=" <+> pretty exp
   -- pretty (Import name) = "import" <+> pretty name
-  pretty (DataType name cases) = "data" <+> pretty name <+> (braces $ nest 4 (line <> vsep (map pretty cases) <> line))
+  pretty (DataType name typeargs cases) = "data" <+> pretty name <+> (hsep $ map pretty typeargs) <+> (braces $ nest 4 (line <> vsep (map pretty cases) <> line))
 
 instance Pretty DataTypeCase where
   pretty (DataTypeCase name fields) = "|" <+> pretty name <+> hsep (map pretty fields)

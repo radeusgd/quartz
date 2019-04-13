@@ -1,22 +1,26 @@
-data ListInt = NilInt | ConsInt Int * ListInt;
+data List a = Nil | Cons a * (List a);
 
 data MaybeInt = Nothing | Just Int;
 
-def head(x: ListInt): Int = case x of {
-    | ConsInt h t -> h
-    | NilInt -> error "empty list"
+def head[a](x: List a): a = case x of {
+    | Cons h t -> h
+    | Nil -> error "empty list"
 };
 
-def headMay(x: ListInt): MaybeInt = case x of {
-    | ConsInt h t -> Just h
-    | NilInt -> Nothing
+def headMay(x: List Int): MaybeInt = case x of {
+    | Cons h t -> Just h
+    | Nil -> Nothing
 };
 
-val lst: ListInt = ConsInt (-1) (ConsInt 0 (ConsInt 1 NilInt));
+val lst: List Int = [-1, 0, 1];
 
-def length(l: ListInt): Int = case l of {
-    | ConsInt h t -> 1 + (length t)
-    | NilInt -> 0
+def length[a](l: List a): Int = case l of {
+    | Cons h t -> 1 + (length t)
+    | Nil -> 0
 };
 
-def main(): String = (toString (head lst)) <+> ", " <+> (toString (length lst));
+def range(start: Int, stop: Int): List Int = if start > stop then Nil else (Cons start (range (start + 1) stop));
+
+val l2: List Int = range 0 10;
+
+def main(): String = (toString (head lst)) <+> "\n" <+> (toString (length l2)) <+> "\n" <+> (toString l2);

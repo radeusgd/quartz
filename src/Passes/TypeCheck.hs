@@ -122,7 +122,7 @@ withTopLevelDecls [] m = m
 withTopLevelDecls (Function name _ maytype _ : t) m = case maytype of
   Just qt -> withTopLevelDecls t $ withVar name qt m
   Nothing -> throwErrorWithContext $ TopLevelTypeNotSpecified name
-withTopLevelDecls (d@(DataType _ _) : t) m =
+withTopLevelDecls (d@(DataType _ _ _) : t) m =
   -- TODO once we have kind checking we need to tell ourselves about our existence so recursive types work
   withTopLevelDecls t $ withDeclaration d m
 
@@ -132,11 +132,13 @@ atomsForFreeVars = map (\i -> '\'' : show i) ([1..] :: [Integer])
 freeTypeVariables :: Type -> Set.Set Integer
 freeTypeVariables (Atom _) = Set.empty
 freeTypeVariables (Abstraction a b) = freeTypeVariables a `Set.union` freeTypeVariables b
+freeTypeVariables (Construction a b) = freeTypeVariables a `Set.union` freeTypeVariables b
 freeTypeVariables (FreeVariable i) = Set.singleton i
 
 substitute :: Subst -> Type -> Type
 substitute _ a@(Atom _) = a
 substitute m (Abstraction a b) = Abstraction (substitute m a) (substitute m b)
+substitute m (Construction a b) = Construction (substitute m a) (substitute m b)
 substitute m v@(FreeVariable i) = fromMaybe v $ M.lookup i m
 
 substituteAtoms :: M.Map Ident Type -> Type -> Type
@@ -144,6 +146,7 @@ substituteAtoms m a@(Atom i) = case M.lookup i m of
   Just t -> t -- replace atom if it's in substitution map
   Nothing -> a -- otherwise, leave it as-is
 substituteAtoms m (Abstraction a b) = Abstraction (substituteAtoms m a) (substituteAtoms m b)
+substituteAtoms m (Construction a b) = Construction (substituteAtoms m a) (substituteAtoms m b)
 substituteAtoms m fp@(FreeVariable _) = fp
 
 withFreeAtoms :: [Ident] -> TCM a -> TCM a
@@ -160,6 +163,7 @@ generalize tt = do
   where
     allAtoms (Atom a) = Set.singleton a
     allAtoms (Abstraction a b) = allAtoms a `Set.union` allAtoms b
+    allAtoms (Construction a b) = allAtoms a `Set.union` allAtoms b
     allAtoms (FreeVariable _) = Set.empty
 
 -- TODO also caonicalize free variable names to a,b,c,...,'1,'2,...
@@ -171,6 +175,7 @@ closeType tt =
       freeAtoms (Atom i@('\'' : _)) = Set.singleton i
       freeAtoms (Atom _) = Set.empty
       freeAtoms (Abstraction a b) = Set.union (freeAtoms a) (freeAtoms b)
+      freeAtoms (Construction a b) = Set.union (freeAtoms a) (freeAtoms b)
       freeAtoms (FreeVariable _) = Set.empty
 
 closeType' :: [Integer] -> Type -> QualifiedType
@@ -206,11 +211,16 @@ unify :: Type -> Type -> TCM Subst
 unify (FreeVariable i) t = bindVar i t
 unify t (FreeVariable i) = bindVar i t
 unify (Atom a) (Atom b) | a == b = return emptySubst
-unify (Abstraction a1 b1) (Abstraction a2 b2) = do
+unify (Construction a1 b1) (Construction a2 b2) = unifyPairs (a1, a2) (b1, b2)
+unify (Abstraction a1 b1) (Abstraction a2 b2) = unifyPairs (a1, a2) (b1, b2)
+unify ta tb = throwErrorWithContext $ TypeMismatch ta tb
+
+unifyPairs :: (Type, Type) -> (Type, Type) -> TCM Subst
+unifyPairs (a1, a2) (b1, b2) = do
   s1 <- unify a1 a2
   s2 <- unify (substitute s1 b1) (substitute s1 b2)
   return $ s1 <#> s2
-unify ta tb = throwErrorWithContext $ TypeMismatch ta tb
+
 
 unifyMany :: [Type] -> TCM Subst
 unifyMany [] = return emptySubst
@@ -256,9 +266,8 @@ getConstructorType (ECase name _ _) = do
   constructor <- readVar name
   return $ getLastType constructor
   where
-    getLastType a@(Atom _) = a
-    getLastType f@(FreeVariable _) = f
     getLastType (Abstraction _ b) = getLastType b
+    getLastType other = other
 
 getCaseArgTypes :: ECase -> TCM [(Ident, QualifiedType)]
 getCaseArgTypes (ECase name args _) = do
@@ -301,7 +310,7 @@ freeAtomsQT m (ForAll vars tt) =
 
 freeAtomsD :: M.Map Ident Type -> Declaration -> Declaration
 freeAtomsD m (Function name args maytype body) = Function name args (freeAtomsQT m <$> maytype) (freeAtomsE m body)
-freeAtomsD m (DataType _ _) = error "TODO"
+freeAtomsD m (DataType _ _ _) = error "TODO"
 
 freeAtomsE :: M.Map Ident Type -> Exp -> Exp
 freeAtomsE m (EApplication a b) = EApplication (freeAtomsE m a) (freeAtomsE m b)
@@ -340,14 +349,15 @@ withDeclaration' (Function name args usertype body) m = do
               let ts = substitute s' ttype
               return (ts, s <#> s')
 
-withDeclaration' (DataType dataTypeName cases) m = do
+withDeclaration' (DataType dataTypeName typeArgs cases) m = do
   r <- foldr withConstructor m cases
   return (r, emptySubst) -- no substitutions here as types are already generic, TODO: right?
   where
     withConstructor (DataTypeCase name argtypes) =
-      withVar name $ ForAll [] (buildConstructor argtypes $ Atom dataTypeName) -- TODO polymorphic datatypes
+      withVar name $ ForAll typeArgs (buildConstructor argtypes $ dataTypeInstanceType typeArgs) -- TODO polymorphic datatypes
     buildConstructor [] resultType = resultType
     buildConstructor (h:t) resultType = Abstraction h (buildConstructor t resultType)
+    dataTypeInstanceType args = List.foldl' (\t -> \a -> Construction t (Atom a)) (Atom dataTypeName) args
 
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e

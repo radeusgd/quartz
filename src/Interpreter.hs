@@ -160,7 +160,7 @@ processDefinition env (Function name args _ exp) = do
       env <- ask
       makeLazy $ return $ VFunction h env (buildFunction t e)
 
-processDefinition env (DataType name cases) = do
+processDefinition env (DataType name typeargs cases) = do -- TODO are typeargs here needed for anything? likely not
   locs <- mapM (\_ -> alloc) cases
   let casesWithLocs = zip cases locs
   let env' = List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind name loc env) env casesWithLocs
