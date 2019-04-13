@@ -28,7 +28,8 @@ makeInitialState = do
   let tenv = case evalInfer $ extendEnvironment emptyTypeEnv builtins of
                Right env -> env
                Left e -> error $ "Fatal error, cannot typecheck builtins: " ++ show e
-  case execInterpreter emptyEnv emptyMemory builtinsEnv of
+  res <- execInterpreter emptyEnv emptyMemory builtinsEnv
+  case res of
     Right (env, mem) ->
       return $ RState tenv env mem
     Left e -> error $ "Fatal error, cannot initialie builtins: " ++ e
@@ -62,8 +63,9 @@ runDecl decl = do
   RState tenv env mem <- get
   case evalInfer $ extendEnvironment tenv [decl] of
     Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-    Right tenv' ->
-      case execInterpreter env mem (processDefinition env decl) of
+    Right tenv' -> do
+      res <- liftIO $ execInterpreter env mem (processDefinition env decl)
+      case res of
         Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
         Right (env', mem') -> do
           modify (\_ -> RState tenv' env' mem')
@@ -74,11 +76,13 @@ runExp exp = do
   RState tenv env mem <- get
   case evalInfer $ withEnvironment tenv $ inferExpType exp of
     Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-    Right _ -> case execInterpreter env mem (interpret exp >>= ishow RunIO) of
-      Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
-      Right (res, mem') -> do
-        modify (\s -> s { rsMem = mem' })
-        liftIO $ putStrLn res
+    Right _ -> do
+      res <- liftIO $ execInterpreter env mem (interpret exp >>= ishow RunIO)
+      case res of
+        Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
+        Right (res, mem') -> do
+          modify (\s -> s { rsMem = mem' })
+          liftIO $ putStrLn res
 
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()

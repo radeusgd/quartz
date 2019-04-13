@@ -12,12 +12,11 @@ defop > (a: Int, b: Int): Bool = ???;
 def if_then_else[a](cond: Bool, tt: a, ff: a): a = ???;
 def error[a](message: String): a = ???;
 def toString[a](x: a): String = ???;
+def print(msg: String): IO () = ???;
+def readLine() : IO String = ???;
+defop >>= [a][b](m: IO a, f: (a -> IO b)): IO b = ???;
 /*
-  print : String -> IO ()
-  readLine : IO String
-  >> : Forall a,b. IO a -> IO b -> IO b
-  >>= : Forall a,b. IO a -> (a -> IO b) -> IO b
   ??? : Forall a. a
-  error : Forall a. String -> a
   limit : Forall a. Int -> a -> Maybe a
+  return : Forall a. a -> IO a
  */

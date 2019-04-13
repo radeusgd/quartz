@@ -5,7 +5,6 @@ import Data.List as List
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
-import Control.Monad.Identity
 import Debug.Trace
 
 import qualified AST.Desugared as Desugared
@@ -19,17 +18,29 @@ data Value
   | VInt Integer
   | VDouble Double
   | VBool Bool
+  | VUnit
   -- function: argname, definition_environemnt (my closure), computation
   | VFunction String Env (Interpreter LazyValue)
   | VDataType Ident [Value] -- right now datatypes are strict (so forcing an instance of a datatpye forces all of it's arguments), this disallows infinite lists for example -- TODO change this to Loc
+  | VIO (Interpreter LazyValue) -- it was prettier when we didn't have IO in interpreter and put it only here but this seems to be easier
 
 instance Show Value where
   show (VStr s) = show s
   show (VInt i) = show i
   show (VDouble d) = show d
   show (VBool b) = show b
+  show (VUnit) = "()"
   show (VFunction arg _ _) = "λ" ++ arg ++ ". [function body]"
-  show (VDataType caseName args) = caseName ++ show args
+  show d@(VDataType caseName args) = case caseName of
+    "Cons" -> show $ unpackList d
+    _ -> caseName ++ show args
+  show (VIO _) = "IO ???"
+
+unpackList :: Value -> [Value]
+unpackList (VDataType "Cons" [v, tail]) = v : unpackList tail
+unpackList (VDataType "Nil" []) = []
+unpackList _ = error "Malformed list represtantation"
+
 
 data ShowMode = RunIO | JustShow
 
@@ -37,8 +48,10 @@ class IShow a where
   ishow :: ShowMode -> a -> Interpreter String
 
 instance IShow Value where
-  ishow _ (VDataType caseName args) = return $ caseName ++ show args -- TODO when changing to lazy datatypes change this
-  -- TODO ishow RunIO (IO a) should execute IO action
+  -- ishow _ (VDataType caseName args) = return $ caseName ++ show args -- TODO when changing to lazy datatypes change this
+  ishow RunIO (VIO computation) = do
+    res <- computation
+    ishow RunIO res
   ishow _ other = return $ show other
 
 instance IShow LazyValue where
@@ -55,7 +68,7 @@ instance Show Thunk where
 
 data Memory = Memory { locs :: Map Loc Thunk, maxloc :: Loc }
 
-type InState = StateT Memory (ExceptT ErrorType Identity)
+type InState = StateT Memory (ExceptT ErrorType IO)
 type Interpreter = ReaderT Env InState
 
 -- traceEnv :: Env -> Interpreter ()
@@ -78,6 +91,7 @@ fromLiteral (LInt s) = return $ VInt s
 fromLiteral (LDouble s) = return $ VDouble s
 fromLiteral (LBool s) = return $ VBool s
 fromLiteral (LError s) = throwError s
+fromLiteral (LUnit) = return VUnit
 
 getJustOrError :: MonadError e m => e -> Maybe a -> m a
 getJustOrError _ (Just v) = return v
@@ -226,8 +240,10 @@ withValEager name val m = do
   setValueEager loc val
   local (bind name loc) m
 
-runInterpreter :: Interpreter a -> Either ErrorType a
-runInterpreter i = fst <$> execInterpreter emptyEnv emptyMemory i
+runInterpreter :: Interpreter a -> IO (Either ErrorType a)
+runInterpreter i = do
+  r <- execInterpreter emptyEnv emptyMemory i
+  return $ fst <$> r
 
 withDeclared :: [Declaration] -> Interpreter a -> Interpreter a
 withDeclared [] i = i
@@ -236,5 +252,5 @@ withDeclared (h:t) i = do
   env' <- processDefinition env h
   local (\_ -> env') $ withDeclared t i
 
-execInterpreter :: Env -> Memory -> Interpreter a -> Either ErrorType (a, Memory)
-execInterpreter env mem i = runIdentity $ runExceptT $ runStateT (runReaderT i env) mem
+execInterpreter :: Env -> Memory -> Interpreter a -> IO (Either ErrorType (a, Memory))
+execInterpreter env mem i = runExceptT $ runStateT (runReaderT i env) mem

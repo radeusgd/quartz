@@ -77,7 +77,7 @@ runExtract fname = do
       printArgs [arg] = arg
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
-runMain :: [Declaration] -> Either Interpreter.ErrorType String
+runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
 runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main") >>= ishow RunIO
 
 runRun :: String -> IO ()
@@ -86,7 +86,8 @@ runRun fname = do
   decls <- handleSyntaxError parsed
   let desugared = map desugarDeclaration decls
   typed <- typeCheck desugared
-  case runMain typed of
+  res <- runMain typed
+  case res of
     Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
     Right res -> putStrLn res
   exitSuccess
@@ -106,7 +107,8 @@ runDebug fname = do
   case tcres of
     Left err -> putStrLn ("Typechecker error: " ++ show err) >> exitFailure
     Right () -> putStrLn "Types ok."
-  case runMain desugared of
+  res <- runMain desugared
+  case res of
     Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
     Right res -> putStrLn res
   exitSuccess
