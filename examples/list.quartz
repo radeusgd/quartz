@@ -1,0 +1,3 @@
+data ListInt = NilInt | ConsInt Int * ListInt;
+
+def main(): String = toString (ConsInt 0 (ConsInt 1 NilInt));

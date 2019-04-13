@@ -278,10 +278,14 @@ withDeclaration' (Function name args usertype body) m = do
               let ts = substitute s' ttype
               return (ts, s <#> s')
 
-withDeclaration' (DataType name cases) m = do
-  r <- m
-   -- TODO declare case constructors
-  return (r, emptySubst)
+withDeclaration' (DataType dataTypeName cases) m = do
+  r <- foldr withConstructor m cases
+  return (r, emptySubst) -- no substitutions here as types are already generic, TODO: right?
+  where
+    withConstructor (DataTypeCase name argtypes) =
+      withVar name $ ForAll [] (buildConstructor argtypes $ Atom dataTypeName) -- TODO polymorphic datatypes
+    buildConstructor [] resultType = resultType
+    buildConstructor (h:t) resultType = Abstraction h (buildConstructor t resultType)
 
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e

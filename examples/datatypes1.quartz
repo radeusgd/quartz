@@ -1,0 +1,5 @@
+data B = T | F;
+
+def f(x: B): B = x;
+
+def main(): String = toString (f T);

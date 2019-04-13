@@ -1,6 +1,7 @@
 module Interpreter where
 
 import Data.Map as M
+import Data.List as List
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
@@ -28,6 +29,7 @@ instance Show Value where
   show (VDouble d) = show d
   show (VBool b) = show b
   show (VFunction arg _ _) = "λ" ++ arg ++ ". [function body]"
+  show (VDataType caseName args) = caseName ++ show args
 
 type ErrorType = String
 
@@ -122,8 +124,14 @@ makeLazy i = do
   env <- ask
   return $ Lazy env i
 
+buildNArgFunction :: Int -> ([LazyValue] -> Interpreter LazyValue) -> Interpreter LazyValue
+buildNArgFunction 0 builder = builder []
+buildNArgFunction n builder = makeLazy $ return $ VFunction "x" emptyEnv $ do
+  x <- readVarLazy "x"
+  buildNArgFunction (n - 1) (\args -> builder (x:args))
+
 processDefinition :: Env -> Declaration -> Interpreter Env
-processDefinition env (Function name args tt exp) = do
+processDefinition env (Function name args _ exp) = do
   loc <- alloc
   let env' = bind name loc env
   val <- local (\_ -> env') $ buildFunction args exp
@@ -131,7 +139,6 @@ processDefinition env (Function name args tt exp) = do
   return env' where
     buildFunction :: [String] -> Exp -> Interpreter LazyValue
     buildFunction [] e = interpret e
-    -- TODO actually want to use env'
     buildFunction [h] e =
       do
       env <- ask
@@ -139,6 +146,22 @@ processDefinition env (Function name args tt exp) = do
     buildFunction (h:t) e = do
       env <- ask
       makeLazy $ return $ VFunction h env (buildFunction t e)
+
+processDefinition env (DataType name cases) = do
+  locs <- mapM (\_ -> alloc) cases
+  let casesWithLocs = zip cases locs
+  let env' = List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind name loc env) env casesWithLocs
+  local (\_ -> env') $ mapM_ defineCase casesWithLocs
+  return env'
+  where
+    defineCase :: (DataTypeCase, Loc) -> Interpreter ()
+    defineCase (DataTypeCase caseName argtypes, loc) = do
+      constructor <- buildNArgFunction (length argtypes) (constructDataTypeInstance caseName)
+      setValue loc constructor
+    constructDataTypeInstance :: Ident -> [LazyValue] -> Interpreter LazyValue
+    constructDataTypeInstance caseName args = makeLazy $ do
+      args' <- mapM force args
+      return $ VDataType caseName args'
 
 interpret :: Exp -> Interpreter LazyValue
 interpret (EConst  c) = makeLazy $ fromLiteral c
