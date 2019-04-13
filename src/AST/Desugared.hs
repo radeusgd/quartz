@@ -78,7 +78,7 @@ instance Pretty QualifiedType where
 instance Pretty Declaration where
   pretty (Function name args ttype exp) = "def" <+> pretty name <+> parens (pretty args) <+> ":" <+> pretty ttype <+> "=" <+> pretty exp
   -- pretty (Import name) = "import" <+> pretty name
-  -- pretty (DataType name cases) = "data" <+> pretty name <+> (braces $ nest 4 (line <> vsep (map pretty cases)))
+  pretty (DataType name cases) = "data" <+> pretty name <+> (braces $ nest 4 (line <> vsep (map pretty cases)))
 
 instance Pretty DataTypeCase where
   pretty (DataTypeCase name fields) = pretty name <+> hsep (map pretty fields)

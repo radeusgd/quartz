@@ -49,7 +49,7 @@ type TypeEnv = M.Map Ident QualifiedType
 emptyTypeEnv :: TypeEnv
 emptyTypeEnv = M.empty
 
-data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFree :: Set.Set Integer, eFreeAtoms :: Set.Set Ident }
+data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFree :: Set.Set Integer, eFreeAtoms :: Set.Set Ident } -- TODO cleanup these
 
 emptyEnv :: Env
 emptyEnv = Env M.empty "???" Set.empty Set.empty
@@ -118,6 +118,9 @@ withTopLevelDecls [] m = m
 withTopLevelDecls (Function name _ maytype _ : t) m = case maytype of
   Just qt -> withTopLevelDecls t $ withVar name qt m
   Nothing -> throwErrorWithContext $ TopLevelTypeNotSpecified name
+withTopLevelDecls (d@(DataType _ _) : t) m =
+  -- TODO once we have kind checking we need to tell ourselves about our existence so recursive types work
+  withTopLevelDecls t $ withDeclaration d m
 
 atomsForFreeVars :: [Ident]
 atomsForFreeVars = map (\i -> '\'' : show i) ([1..] :: [Integer])
@@ -275,7 +278,10 @@ withDeclaration' (Function name args usertype body) m = do
               let ts = substitute s' ttype
               return (ts, s <#> s')
 
-withDeclaration' _ _ = error "TODO withDeclaration'"
+withDeclaration' (DataType name cases) m = do
+  r <- m
+   -- TODO declare case constructors
+  return (r, emptySubst)
 
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e

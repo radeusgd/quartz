@@ -47,7 +47,7 @@ desugarExpression (A.EList elems) = desugarList elems
 desugarType :: A.Type -> D.Type
 desugarType (A.Atom (QIdent (_, name))) = D.Atom name
 desugarType A.UnitAtom = D.Atom "()"
-desugarType (A.Constructor (QIdent (_, name)) args) = error "TODO" -- D.Atom name -- TODO FIXME constructor args support!!!
+desugarType (A.Constructor (QIdent (_, name)) args) = if null args then D.Atom name else error "TODO parametric datatypes" -- -- TODO FIXME constructor args support!!!
 desugarType (A.Abstraction ta tb) = D.Abstraction (desugarType ta) (desugarType tb)
 
 -- returns type of a functions with given list of arguments and return value
