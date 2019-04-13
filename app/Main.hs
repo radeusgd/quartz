@@ -77,8 +77,8 @@ runExtract fname = do
       printArgs [arg] = arg
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
-runMain :: [Declaration] -> Either Interpreter.ErrorType Interpreter.Value
-runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main") >>= force
+runMain :: [Declaration] -> Either Interpreter.ErrorType String
+runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main") >>= ishow RunIO
 
 runRun :: String -> IO ()
 runRun fname = do
@@ -88,7 +88,7 @@ runRun fname = do
   typed <- typeCheck desugared
   case runMain typed of
     Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-    Right res -> print res
+    Right res -> putStrLn res
   exitSuccess
 
 runDebug :: String -> IO ()
@@ -108,7 +108,7 @@ runDebug fname = do
     Right () -> putStrLn "Types ok."
   case runMain desugared of
     Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-    Right res -> print res
+    Right res -> putStrLn res
   exitSuccess
   where
     prettyLine x = (PrettyText.putDoc $ Pretty.pretty x) >> putStrLn ""

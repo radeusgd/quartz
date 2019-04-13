@@ -74,11 +74,11 @@ runExp exp = do
   RState tenv env mem <- get
   case evalInfer $ withEnvironment tenv $ inferExpType exp of
     Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-    Right _ -> case execInterpreter env mem (interpret exp >>= force) of
+    Right _ -> case execInterpreter env mem (interpret exp >>= ishow RunIO) of
       Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
       Right (res, mem') -> do
         modify (\s -> s { rsMem = mem' })
-        liftIO $ print res
+        liftIO $ putStrLn res
 
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()

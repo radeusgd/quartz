@@ -99,7 +99,7 @@ builtins = [
   (">", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x > y),
   ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do (VBool x) <- force cond; return $ if x then tt else ff)),
   ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg),
-  ("toString", make1ArgFun $ \v -> VStr $ show v)
+  ("toString", make1ArgFunLazy $ \v -> do s <- ishow JustShow v; makeLazy $ return $ VStr s)
            ]
 
 instance Eq Value where

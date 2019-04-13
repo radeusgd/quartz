@@ -21,7 +21,7 @@ data Value
   | VBool Bool
   -- function: argname, definition_environemnt (my closure), computation
   | VFunction String Env (Interpreter LazyValue)
-  | VDataType Ident [Value] -- right now datatypes are strict (so forcing an instance of a datatpye forces all of it's arguments), this disallows infinite lists for example
+  | VDataType Ident [Value] -- right now datatypes are strict (so forcing an instance of a datatpye forces all of it's arguments), this disallows infinite lists for example -- TODO change this to Loc
 
 instance Show Value where
   show (VStr s) = show s
@@ -30,6 +30,19 @@ instance Show Value where
   show (VBool b) = show b
   show (VFunction arg _ _) = "λ" ++ arg ++ ". [function body]"
   show (VDataType caseName args) = caseName ++ show args
+
+data ShowMode = RunIO | JustShow
+
+class IShow a where
+  ishow :: ShowMode -> a -> Interpreter String
+
+instance IShow Value where
+  ishow _ (VDataType caseName args) = return $ caseName ++ show args -- TODO when changing to lazy datatypes change this
+  -- TODO ishow RunIO (IO a) should execute IO action
+  ishow _ other = return $ show other
+
+instance IShow LazyValue where
+  ishow mode = force >=> ishow mode
 
 type ErrorType = String
 
