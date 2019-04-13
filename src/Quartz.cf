@@ -40,7 +40,7 @@ separator nonempty Type2 "" ;
 coercions Type 2 ;
 -- TODO complex types, typeclasses
 
-EApp. Exp ::= Exp Exp2 ;
+EApp. Exp1 ::= Exp Exp2 ;
 ECustomOp. Exp1 ::= Exp1 CustomOperator Exp2 ;
 EIfThenElse. Exp1 ::= "if" Exp2 "then" Exp2 "else" Exp2 ;
 ELambda. Exp1 ::= "\\" QIdent "->" Exp2 ;
@@ -51,7 +51,9 @@ EDiv. Exp3 ::= Exp3 "/" Exp4 ;
 EVar. Exp4 ::= QIdent ;
 EStr. Exp4 ::= String ;
 EInt. Exp4 ::= Integer ;
+ENegInt. Exp1 ::= "-" Integer ;
 EDouble. Exp4 ::= Double ;
+ENegDouble. Exp1 ::= "-" Double ;
 ETrue. Exp4 ::= "true" ;
 EFalse. Exp4 ::= "false" ;
 EUndefined. Exp4 ::= "???" ;

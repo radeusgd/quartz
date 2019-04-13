@@ -12,7 +12,7 @@ def headMay(x: ListInt): MaybeInt = case x of {
     | NilInt -> Nothing
 };
 
-val lst: ListInt = ConsInt 0 (ConsInt 1 NilInt);
+val lst: ListInt = ConsInt (-1) (ConsInt 0 (ConsInt 1 NilInt));
 
 def length(l: ListInt): Int = case l of {
     | ConsInt h t -> 1 + (length t)
