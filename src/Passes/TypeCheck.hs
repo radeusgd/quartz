@@ -15,6 +15,7 @@ import Control.Monad.Reader
 import Control.Monad.Except
 import Control.Monad.State
 import qualified Data.Map as M
+import qualified Data.List as List
 import qualified Data.Set as Set
 import Data.Maybe
 
@@ -94,6 +95,9 @@ withVar :: Ident -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
   introduceType :: Ident -> QualifiedType -> Env -> Env
   introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (M.insert i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
+
+withVars :: [(Ident, QualifiedType)] -> TCM a -> TCM a
+withVars lst m = foldr (uncurry withVar) m lst
 
 emptySubst :: Subst
 emptySubst = M.empty
@@ -208,6 +212,15 @@ unify (Abstraction a1 b1) (Abstraction a2 b2) = do
   return $ s1 <#> s2
 unify ta tb = throwErrorWithContext $ TypeMismatch ta tb
 
+unifyMany :: [Type] -> TCM Subst
+unifyMany [] = return emptySubst
+unifyMany [_] = return emptySubst
+unifyMany [a, b] = unify a b
+unifyMany (a:b:t) = do
+  s <- unify a b
+  s' <- unifyMany (substitute s b : t)
+  return $ s <#> s'
+
 buildLambda :: [Ident] -> Exp -> Exp
 buildLambda [] e = e
 buildLambda (a:t) e = ELambda a (buildLambda t e)
@@ -229,11 +242,58 @@ inferE' (ELambda x e) = do
   xt <- freshFreeType
   (et, s) <- withVar x (ForAll [] xt) $ inferE' e
   return $ (Abstraction (substitute s xt) (substitute s et), s)
+inferE' (ECaseOf e cases) = do
+  (inpT, outT, sc) <- inferCases cases
+  (e', se) <- inferE' e
+  su <- unify inpT e'
+  let s' = se <#> su
+  return (substitute s' outT, sc <#> s')
 inferE' (EBlock decls e) = inferBlock decls e
+
+-- TODO these may be more complex for polymorphic types
+getConstructorType :: ECase -> TCM Type
+getConstructorType (ECase name _ _) = do
+  constructor <- readVar name
+  return $ getLastType constructor
+  where
+    getLastType a@(Atom _) = a
+    getLastType f@(FreeVariable _) = f
+    getLastType (Abstraction _ b) = getLastType b
+
+getCaseArgTypes :: ECase -> TCM [(Ident, QualifiedType)]
+getCaseArgTypes (ECase name args _) = do
+  constructor <- readVar name
+  let argtypes = getFirstNTypes (length args) constructor
+  return $ zip args $ map (ForAll []) argtypes
+  where
+    getFirstNTypes 0 _ = []
+    getFirstNTypes 1 (Abstraction a b) = [a]
+    getFirstNTypes 1 other = [other]
+    getFirstNTypes n (Abstraction a b) = a : getFirstNTypes (n-1) b
+    getFirstNTypes _ _ = error "Constructor arity error"
+
+inferCaseResult :: ECase -> TCM (Type, Subst)
+inferCaseResult c@(ECase _ _ e) = do
+  typedargs <- getCaseArgTypes c
+  withVars typedargs $ inferE' e
+
+-- infers the input type of case set and its output type
+inferCases :: [ECase] -> TCM (Type, Type, Subst)
+inferCases cases = do
+  inputs <- mapM getConstructorType cases
+  si <- unifyMany inputs
+  let inputType = head inputs
+  (outputTypes, substs) <- unzip <$> mapM inferCaseResult cases
+  let sr = List.foldl' (<#>) emptySubst substs
+  so <- unifyMany outputTypes
+  let s' = si <#> so <#> sr
+  let outputType = head outputTypes
+  return (substitute s' inputType, substitute s' outputType, s')
 
 withDeclaration :: Declaration -> TCM a -> TCM a
 withDeclaration d m = fst <$> withDeclaration' d m
 
+-- TODO this freeAtoms over Expressions and Declarations should be refactored into some kind of fmap
 freeAtomsQT :: M.Map Ident Type -> QualifiedType -> QualifiedType
 freeAtomsQT m (ForAll vars tt) =
   let m' = foldr (M.delete) m vars in
@@ -246,6 +306,8 @@ freeAtomsD m (DataType _ _) = error "TODO"
 freeAtomsE :: M.Map Ident Type -> Exp -> Exp
 freeAtomsE m (EApplication a b) = EApplication (freeAtomsE m a) (freeAtomsE m b)
 freeAtomsE m (ELambda x e) = ELambda x (freeAtomsE m e)
+freeAtomsE m (ECaseOf e cases) = ECaseOf (freeAtomsE m e) (map freeAtomsCase cases) where
+  freeAtomsCase (ECase n args e) = ECase n args $ freeAtomsE m e
 freeAtomsE m (EBlock decls e) = EBlock (map (freeAtomsD m) decls) (freeAtomsE m e)
 freeAtomsE m v@(EVar _) = v
 freeAtomsE m c@(EConst _) = c

@@ -96,8 +96,6 @@ complete n = let cmds = map ((':':) . fst) options in do
   tenv <- gets rsTypeEnv
   let names = Map.keys tenv
   return $ filter (isPrefixOf n) (names ++ cmds)
-  where
-    getName (Function name _ _ _) = name
 
 help :: [String] -> Repl ()
 help args = liftIO $ print $ "Help: " ++ show args

@@ -38,10 +38,19 @@ desugarExpression (A.EUndefined) = D.EConst $ LError "undefined"
 desugarExpression (A.EBlock decls e) =
   D.EBlock (map desugarDeclaration decls) (desugarExpression e)
 desugarExpression A.EUnit = D.EConst $ LUnit
-desugarExpression (A.EMatch e cases) = D.EVar "TODO"
+desugarExpression (A.EMatch e cases) =
+  if null cases
+  then D.EConst $ LError "empty case of"
+  else D.ECaseOf (desugarExpression e) (map desugarCase cases)
 desugarExpression (A.ELambda (QIdent (_, v)) e) = D.ELambda v (desugarExpression e)
 desugarExpression (A.EDo clauses) = desugarDoNotation clauses
 desugarExpression (A.EList elems) = desugarList elems
+
+desugarQIdent :: QIdent -> Ident
+desugarQIdent (QIdent (_, i)) = i
+
+desugarCase :: A.Case -> D.ECase
+desugarCase (A.SimpleCase name args e) = D.ECase (desugarQIdent name) (map desugarQIdent args) (desugarExpression e)
 
 -- TODO the typing pass may need to use some Reader or State to keep track of fresh variables once we add better inference
 desugarType :: A.Type -> D.Type

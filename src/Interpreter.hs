@@ -186,17 +186,45 @@ interpret (EVar v) = makeLazy $ readVar v
 interpret (ELambda argname exp) = do
   env <- ask
   makeLazy $ return $ VFunction argname env (interpret exp)
+interpret (ECaseOf e cases) = do
+  matched <- interpret e >>= force
+  case matched of
+    (VDataType constructorName args) -> matchCase constructorName args cases
+    _ -> throwError "Trying to match over a non-data type (why didn't typechecker catch this?)"
+  where
+    matchCase constructorName dataargs [] =
+      throwError "Non-exhaustive pattern match"
+    matchCase constructorName dataargs (ECase name args e:t) =
+      if name /= constructorName then matchCase constructorName dataargs t
+      else if length dataargs /= length args then throwError "Datatype arguments count mismatch (data representation and case match have different number of arguments), shouldn't ever happen"
+      else do
+        withValsEager (zip args dataargs) $ interpret e
+
 interpret (EApplication fun arg) = makeLazy $ do
   fun' <- interpret fun >>= force
   arg' <- interpret arg
   case fun' of
-    (VFunction argname funEnv computation) -> do
-      argloc <- alloc
-      setValue argloc arg'
-      let innerEnv = bind argname argloc funEnv
-      -- traceEnv innerEnv
-      local (\_ -> innerEnv) computation >>= force -- TODO do we want to force here? FIXME likely not
+    (VFunction argname funEnv computation) -> local (\_ -> funEnv) $
+      withVal argname arg' computation >>= force -- TODO do we want to force here? FIXME likely not
     _ -> throwError "Trying to apply to a non-function (why didn't typechecker catch this?)"
+
+withVals :: [(Ident, LazyValue)] -> Interpreter a -> Interpreter a
+withVals lst m = List.foldr (uncurry withVal) m lst
+
+withVal :: Ident -> LazyValue -> Interpreter a -> Interpreter a
+withVal name val m = do
+  loc <- alloc
+  setValue loc val
+  local (bind name loc) m
+
+withValsEager :: [(Ident, Value)] -> Interpreter a -> Interpreter a
+withValsEager lst m = List.foldr (uncurry withValEager) m lst
+
+withValEager :: Ident -> Value -> Interpreter a -> Interpreter a
+withValEager name val m = do
+  loc <- alloc
+  setValueEager loc val
+  local (bind name loc) m
 
 runInterpreter :: Interpreter a -> Either ErrorType a
 runInterpreter i = fst <$> execInterpreter emptyEnv emptyMemory i

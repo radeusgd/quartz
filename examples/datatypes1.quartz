@@ -1,5 +1,8 @@
 data B = T | F;
 
-def f(x: B): B = x;
+def not(x: B): B = case x of {
+    | T -> F
+    | F -> T
+};
 
-def main(): String = toString (f T);
+def main(): String = toString (not T);

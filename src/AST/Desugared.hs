@@ -44,7 +44,10 @@ data Exp
   | EVar Ident
   | EConst Literal
   | ELambda Ident Exp
+  | ECaseOf Exp [ECase]
   | EBlock [Declaration] Exp
+
+data ECase = ECase Ident [Ident] Exp
 
 instance Pretty Literal where
   pretty (LStr s) = dquotes $ pretty s
@@ -78,18 +81,22 @@ instance Pretty QualifiedType where
 instance Pretty Declaration where
   pretty (Function name args ttype exp) = "def" <+> pretty name <+> parens (pretty args) <+> ":" <+> pretty ttype <+> "=" <+> pretty exp
   -- pretty (Import name) = "import" <+> pretty name
-  pretty (DataType name cases) = "data" <+> pretty name <+> (braces $ nest 4 (line <> vsep (map pretty cases)))
+  pretty (DataType name cases) = "data" <+> pretty name <+> (braces $ nest 4 (line <> vsep (map pretty cases) <> line))
 
 instance Pretty DataTypeCase where
-  pretty (DataTypeCase name fields) = pretty name <+> hsep (map pretty fields)
+  pretty (DataTypeCase name fields) = "|" <+> pretty name <+> hsep (map pretty fields)
 
 instance Pretty Exp where
   pretty (EApplication a b) = parens (pretty a <+> pretty b)
   pretty (EVar v) = pretty v
   pretty (EConst v) = pretty v
   pretty (ELambda v e) = "λ" <> pretty v <> "." <+> pretty e
+  pretty (ECaseOf e cases) = "case" <+> pretty e <+> "of" <+> (braces $ nest 4 (line <> vsep (map pretty cases) <> line))
   pretty (EBlock decls exp) =
     braces $ nest 4 (line <> vsep (map pretty decls) <> line <> pretty exp <> line)
+
+instance Pretty ECase where
+  pretty (ECase name args e) = "|" <+> pretty name <+> hsep (map pretty args) <+> "->" <+> pretty e
 
 instance Show Literal where
   show = renderString . layoutSmart defaultLayoutOptions . pretty
