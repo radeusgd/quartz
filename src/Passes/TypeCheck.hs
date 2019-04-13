@@ -18,7 +18,7 @@ import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.Maybe
 
-import Debug.Trace
+-- import Debug.Trace
 
 import AST.Desugared
 
@@ -217,10 +217,10 @@ inferE' (EApplication f arg) = do
   (f', sf) <- inferE' f
   (arg', sa) <- inferE' arg
   res <- freshFreeType
-  traceShowM ("app", f', arg')
+  -- traceShowM ("app", f', arg')
   s <- unify f' (Abstraction arg' res)
   return (substitute s res, sf <#> sa <#> s)
-inferE' (EVar v) = noSubst $ do t <- readVar v; traceShowM ("var", v, t); return t
+inferE' (EVar v) = noSubst $ readVar v
 inferE' (EConst c) = noSubst $ literalType c
 inferE' (ELambda x e) = do
   xt <- freshFreeType
@@ -260,7 +260,7 @@ withDeclaration' (Function name args usertype body) m = do
   (ttype, subst) <- inferred body'
   let qtype = closeType ttype
   -- qtype <- generalize ttype
-  traceShowM ("withdecl", name, ttype, qtype)
+  -- traceShowM ("withdecl", name, ttype, qtype)
   res <- withVar name qtype $ m
   return (res, subst)
   where inferred body =
