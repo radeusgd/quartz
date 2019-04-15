@@ -219,7 +219,7 @@ interpret (EApplication fun arg) = makeLazy $ do
   arg' <- interpret arg
   case fun' of
     (VFunction argname funEnv computation) -> local (\_ -> funEnv) $
-      withVal argname arg' computation >>= force -- TODO do we want to force here? FIXME likely not
+      withVal argname arg' computation >>= force -- TODO not sure if want to leave it like this
     _ -> throwError $ "Trying to apply to a non-function (" ++ show fun ++ ") (why didn't typechecker catch this?)"
 
 withVals :: [(Ident, LazyValue)] -> Interpreter a -> Interpreter a

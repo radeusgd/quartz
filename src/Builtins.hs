@@ -106,7 +106,7 @@ builtins = [
   ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do (VBool x) <- force cond; return $ if x then tt else ff)),
   ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg),
   ("toString", make1ArgFunLazy $ \v -> do s <- ishow JustShow v; makeLazy $ return $ VStr s),
-  ("print", make1ArgFun $ \(VStr msg) -> VIO (do liftIO $ putStrLn msg; makeLazy $ return $ VUnit)),
+  ("print", make1ArgFun $ \(VStr msg) -> VIO (makeLazy $ do liftIO $ putStrLn msg; return $ VUnit)),
   ("readLine", VIO (makeLazy $ VStr <$> (liftIO getLine))),
   (">>=", make2ArgFunLazy sequenceIO),
   ("return", make1ArgFunLazy $ \v -> makeLazy $ return $ VIO (return v)),
@@ -114,11 +114,12 @@ builtins = [
   ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b)
            ] where
   sequenceIO :: LazyValue -> LazyValue -> Interpreter LazyValue
-  sequenceIO m' f' = do
-    (VIO m) <- force m'
-    left <- m -- force IO computation
-    (VFunction argname funEnv computation) <- force f'
-    local (\_ -> funEnv) $ withVal argname left computation
+  sequenceIO m' f' = makeLazy $ return $ VIO $ makeLazy $ do
+    (VIO m) <- force m' -- compute 1st arg
+    left <- m >>= force -- force first IO computation
+    (VFunction argname funEnv computation) <- force f' -- compute 2nd arg
+    (VIO res) <- local (\_ -> funEnv) $ withVal argname (Lazy undefined $ return left) computation >>= force -- run 2nd arg with 1st's argument (force IO) and unpack it's result
+    res >>= force
 
 -- def print(msg: String): IO () = ???;
 -- def readLine() : IO String = ???;

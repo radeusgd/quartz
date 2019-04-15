@@ -25,7 +25,7 @@ def block(a: Int, b: Int): String = {
 /*
   do notation that's transformed into >> and >>=
   Initially, >>= :: IO a -> (a -> IO b) -> IO b
-  Type classes not supported in first version.
+  Type classes not supported in first version, so it works for IO only, not all monads.
 */
 def twolines(): IO () = do {
     print "Line 1:";
@@ -52,8 +52,7 @@ def main(): IO () = do {
         val len = length ([1.0,2.0] <++> [3.0,4.0]);
         print (id >< toString len) // 4
     };
-    print "fact 5 = ";
-    print (toString >< fact 5); // 120
+    print ("fact 5 = " <+> (toString >< fact 5)); // 120
     print (unsafeHead ["a", "b", "c"]); // a
     print (const "x" 3); // x
     print limited; // terminated
