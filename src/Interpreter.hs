@@ -220,7 +220,7 @@ interpret (EApplication fun arg) = makeLazy $ do
   case fun' of
     (VFunction argname funEnv computation) -> local (\_ -> funEnv) $
       withVal argname arg' computation >>= force -- TODO do we want to force here? FIXME likely not
-    _ -> throwError "Trying to apply to a non-function (why didn't typechecker catch this?)"
+    _ -> throwError $ "Trying to apply to a non-function (" ++ show fun ++ ") (why didn't typechecker catch this?)"
 
 withVals :: [(Ident, LazyValue)] -> Interpreter a -> Interpreter a
 withVals lst m = List.foldr (uncurry withVal) m lst

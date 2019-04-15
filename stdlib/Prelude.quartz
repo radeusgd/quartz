@@ -1,0 +1,65 @@
+def id[a](x: a):a = x;
+
+def const[a][b](a: a, b: b): a = a;
+
+def compose[a][b][c](f: a -> b, g: b -> c): a -> c = \a -> g (f a);
+
+data List a = Cons a * List a | Nil;
+data Maybe a = Just a | Nothing;
+
+def getOrElse[a](m: Maybe a, default: a): a = case m of {
+    | Just a -> a
+    | Nothing -> default
+};
+
+def head[a](l: List a): Maybe a = case l of {
+    | Cons h t -> Just h
+    | Nil -> Nothing
+};
+
+def unsafeTail[a](l: List a): List a = case l of {
+    | Cons h t -> t
+    | Nil -> error "Empty list"
+};
+
+def length[a](l: List a): Int = case l of {
+    | Nil -> 0
+    | Cons x tail -> 1 + (length tail)
+};
+
+def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
+
+def map[a][b](f: a -> b, l: List a): List b = case l of {
+    | Nil -> Nil
+    | Cons h t -> Cons (f h) (map f t)
+};
+
+def append[a](l1: List a, l2: List a): List a = case l1 of {
+    | Nil -> l2
+    | Cons h t -> Cons h (append t l2)
+};
+
+defop <++>[a](l1: List a, l2: List a): List a = append l1 l2;
+
+def flatten[a](l: List (List a)): List a = case l of {
+    | Nil -> Nil
+    | Cons l1 t -> append l1 (flatten t)
+};
+
+def foldLeft[a][b](f: b -> a -> b, z: b, l: List a): b = case l of {
+    | Nil -> z
+    | Cons h t -> foldLeft f (f z h) t
+};
+
+def foldRight[a][b](f: a -> b -> b, z: b, l: List a): b = case l of {
+    | Nil -> z
+    | Cons h t ->  f h (foldRight f z t)
+};
+
+def fold[a](z: a, f: a -> a -> a, l: List a): a = foldLeft f z l;
+
+def flip[a][b][c](f: a -> b -> c): b -> a -> c = \b -> (\a -> (f a b));
+
+def reverse[a](l: List a): List a = foldLeft (flip Cons) [] l;
+
+defop >>[a][b](x: IO a, y: IO b): IO b = x >>= (\discard -> y);

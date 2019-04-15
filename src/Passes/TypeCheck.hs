@@ -328,12 +328,19 @@ freeTheAtoms atoms exp = do
 
 withDeclaration' :: Declaration -> TCM a -> TCM (a, Subst)
 withDeclaration' (Function name args usertype body) m = do
-  body' <- case usertype of
-    Nothing -> return body
-    Just (ForAll vars _) -> freeTheAtoms vars body
-  (ttype, subst) <- inferred body'
-  let qtype = closeType ttype
-  -- qtype <- generalize ttype
+  (ttype, subst) <- case usertype of -- this implementation would allow for recursion only if the signature is provided
+    Nothing -> inferred body
+    Just t@(ForAll vars _) -> do
+      body' <- freeTheAtoms vars body
+      withVar name t $ inferred body'
+  -- body' <- case usertype of -- this could allow for recursion without explicit type signature
+  --   Nothing -> return body
+  --   Just (ForAll vars _) -> freeTheAtoms vars body
+  -- rectype <- freshFreeType
+  -- (ttype, subst) <- withVar name (ForAll [] rectype) $ inferred body'
+  -- subst'' <- 
+  -- let qtype = closeType ttype
+  qtype <- generalize ttype
   -- traceShowM ("withdecl", name, ttype, qtype)
   res <- withVar name qtype $ m
   return (res, subst)

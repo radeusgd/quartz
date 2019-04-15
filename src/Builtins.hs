@@ -84,6 +84,12 @@ make3ArgFun f = VFunction "z" emptyEnv $ do
   z <- readVar "z"
   makeLazy $ return $ make2ArgFun (f z)
 
+makeNothing :: Value
+makeNothing = VDataType "Nothing" []
+
+makeJust :: Value -> Value
+makeJust v = VDataType "Just" [v]
+
 builtins :: [(String, Value)]
 builtins = [
   -- TODO actually plus should be polymorphic... but for now let's skip this
@@ -102,7 +108,10 @@ builtins = [
   ("toString", make1ArgFunLazy $ \v -> do s <- ishow JustShow v; makeLazy $ return $ VStr s),
   ("print", make1ArgFun $ \(VStr msg) -> VIO (do liftIO $ putStrLn msg; makeLazy $ return $ VUnit)),
   ("readLine", VIO (makeLazy $ VStr <$> (liftIO getLine))),
-  (">>=", make2ArgFunLazy sequenceIO)
+  (">>=", make2ArgFunLazy sequenceIO),
+  ("return", make1ArgFunLazy $ \v -> makeLazy $ return $ VIO (return v)),
+  ("limit", make2ArgFunLazy $ \limit' -> \v -> makeLazy $ return $ makeNothing), -- TODO actually implement this
+  ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b)
            ] where
   sequenceIO :: LazyValue -> LazyValue -> Interpreter LazyValue
   sequenceIO m' f' = do
