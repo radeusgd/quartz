@@ -1,3 +1,9 @@
+/*
+  Below are type signatures of builtin - native functions
+  This one is defined as a syntax sugar:
+  ??? : Forall a. a
+  so that the typechecker accepts empty expressions (they will be replaced with native code in evaluation).
+*/
 // special syntax for defining builtin +,*,-,/
 defop (+) (a: Int, b: Int): Int = ???;
 defop (-) (a: Int, b: Int): Int = ???;
@@ -15,9 +21,9 @@ def toString[a](x: a): String = ???;
 def print(msg: String): IO () = ???;
 def readLine() : IO String = ???;
 defop >>= [a][b](m: IO a, f: (a -> IO b)): IO b = ???;
+defop >>[a][b](x: IO a, y: IO b): IO b = ???;
 def return[a](x: a): IO a = ???;
 def limit[a](maxApplications: Int, expr: a): Maybe a = ???;
 def seq[a][b](a: a, b: b): b = ???;
-/*
-  ??? : Forall a. a
- */
+
+data List a = Cons a * List a | Nil;

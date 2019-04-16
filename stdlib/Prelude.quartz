@@ -4,7 +4,7 @@ def const[a][b](a: a, b: b): a = a;
 
 def compose[a][b][c](f: a -> b, g: b -> c): a -> c = \a -> g (f a);
 
-data List a = Cons a * List a | Nil;
+//data List a = Cons a * List a | Nil; // list is a builtin now, but it can also be defined like this, it's builtin only for the syntactic sugar to work
 data Maybe a = Just a | Nothing;
 
 def getOrElse[a](m: Maybe a, default: a): a = case m of {
@@ -56,10 +56,8 @@ def foldRight[a][b](f: a -> b -> b, z: b, l: List a): b = case l of {
     | Cons h t ->  f h (foldRight f z t)
 };
 
-def fold[a](z: a, f: a -> a -> a, l: List a): a = foldLeft f z l;
+def fold[a](f: a -> a -> a, z: a, l: List a): a = foldLeft f z l;
 
 def flip[a][b][c](f: a -> b -> c): b -> a -> c = \b -> (\a -> (f a b));
 
 def reverse[a](l: List a): List a = foldLeft (flip Cons) [] l;
-
-defop >>[a][b](x: IO a, y: IO b): IO b = x >>= (\discard -> y);

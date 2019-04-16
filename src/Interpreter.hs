@@ -33,6 +33,7 @@ instance Show Value where
   show (VFunction arg _ _) = "λ" ++ arg ++ ". [function body]"
   show d@(VDataType caseName args) = case caseName of
     "Cons" -> show $ unpackList d
+    "Nil" -> "[]"
     _ -> caseName ++ show args
   show (VIO _) = "IO ???"
 

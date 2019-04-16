@@ -90,6 +90,12 @@ makeNothing = VDataType "Nothing" []
 makeJust :: Value -> Value
 makeJust v = VDataType "Just" [v]
 
+makeNil :: Value
+makeNil = VDataType "Nil" []
+
+makeCons :: Value -> Value -> Value
+makeCons h t = VDataType "Cons" [h, t]
+
 builtins :: [(String, Value)]
 builtins = [
   -- TODO actually plus should be polymorphic... but for now let's skip this
@@ -109,9 +115,12 @@ builtins = [
   ("print", make1ArgFun $ \(VStr msg) -> VIO (makeLazy $ do liftIO $ putStrLn msg; return $ VUnit)),
   ("readLine", VIO (makeLazy $ VStr <$> (liftIO getLine))),
   (">>=", make2ArgFunLazy sequenceIO),
+  (">>", make2ArgFunLazy sequenceIODiscard),
   ("return", make1ArgFunLazy $ \v -> makeLazy $ return $ VIO (return v)),
   ("limit", make2ArgFunLazy $ \limit' -> \v -> makeLazy $ return $ makeNothing), -- TODO actually implement this
-  ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b)
+  ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b),
+  ("Nil", makeNil),
+  ("Cons", make2ArgFun makeCons)
            ] where
   sequenceIO :: LazyValue -> LazyValue -> Interpreter LazyValue
   sequenceIO m' f' = makeLazy $ return $ VIO $ makeLazy $ do
@@ -120,6 +129,13 @@ builtins = [
     (VFunction argname funEnv computation) <- force f' -- compute 2nd arg
     (VIO res) <- local (\_ -> funEnv) $ withVal argname (Lazy undefined $ return left) computation >>= force -- run 2nd arg with 1st's argument (force IO) and unpack it's result
     res >>= force
+  sequenceIODiscard :: LazyValue -> LazyValue -> Interpreter LazyValue
+  sequenceIODiscard a b = makeLazy $ return $ VIO $ makeLazy $ do
+    (VIO ia) <- force a
+    _ <- ia >>= force -- we force here so that the computation surely runs, TODO might want to reconsider this though
+    -- the goal is to have print "a" >> print "b" work correctly, but ideally (return ???) >> print "a" should not crash (which it does now)
+    (VIO ib) <- force b
+    ib >>= force
 
 -- def print(msg: String): IO () = ???;
 -- def readLine() : IO String = ???;
