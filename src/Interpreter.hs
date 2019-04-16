@@ -17,7 +17,6 @@ data Value
   = VStr String
   | VInt Integer
   | VDouble Double
-  | VBool Bool
   | VUnit
   -- function: argname, definition_environemnt (my closure), computation
   | VFunction String Env (Interpreter LazyValue)
@@ -28,13 +27,14 @@ instance Show Value where
   show (VStr s) = show s
   show (VInt i) = show i
   show (VDouble d) = show d
-  show (VBool b) = show b
   show (VUnit) = "()"
   show (VFunction arg _ _) = "λ" ++ arg ++ ". [function body]"
   show d@(VDataType caseName args) = case caseName of
     "Cons" -> show $ unpackList d
     "Nil" -> "[]"
-    _ -> caseName ++ show args
+    _ -> caseName ++ case args of
+      [] -> ""
+      _ -> show args
   show (VIO _) = "IO ???"
 
 unpackList :: Value -> [Value]
@@ -90,7 +90,6 @@ fromLiteral :: Desugared.Literal -> Interpreter Value
 fromLiteral (LStr s) = return $ VStr s
 fromLiteral (LInt s) = return $ VInt s
 fromLiteral (LDouble s) = return $ VDouble s
-fromLiteral (LBool s) = return $ VBool s
 fromLiteral (LError s) = throwError s
 fromLiteral (LUnit) = return VUnit
 

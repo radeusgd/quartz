@@ -37,8 +37,6 @@ desugarExpression (A.EInt i) = D.EConst $ LInt i
 desugarExpression (A.ENegInt i) = D.EConst $ LInt (-i)
 desugarExpression (A.EDouble d) = D.EConst $ LDouble d
 desugarExpression (A.ENegDouble d) = D.EConst $ LDouble (-d)
-desugarExpression A.ETrue = D.EConst $ LBool True
-desugarExpression A.EFalse = D.EConst $ LBool False
 desugarExpression (A.EUndefined) = D.EConst $ LError "undefined"
 desugarExpression (A.EBlock decls e) =
   D.EBlock (map desugarDeclaration decls) (desugarExpression e)

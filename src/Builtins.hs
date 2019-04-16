@@ -96,20 +96,31 @@ makeNil = VDataType "Nil" []
 makeCons :: Value -> Value -> Value
 makeCons h t = VDataType "Cons" [h, t]
 
+makeBool :: Bool -> Value
+makeBool True = VDataType "True" []
+makeBool False = VDataType "False" []
+
+unpackBool :: Value -> Bool
+unpackBool (VDataType "True" []) = True
+unpackBool (VDataType "False" []) = False
+unpackBool other = error (show other ++ " is not a valid Boolean type")
+
 builtins :: [(String, Value)]
 builtins = [
+  ("True", makeBool True),
+  ("False", makeBool False),
   -- TODO actually plus should be polymorphic... but for now let's skip this
   ("+", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x + y)),
   ("*", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x * y)),
   ("-", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x - y)),
   ("/", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x `div` y)),
   ("<+>", (make2ArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b)),
-  ("==", make2ArgFun $ \x -> \y -> VBool $ x == y),
-  ("<=", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x <= y),
-  (">=", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x >= y),
-  ("<", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x < y),
-  (">", make2ArgFun $ \(VInt x) -> \(VInt y) -> VBool $ x > y),
-  ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do (VBool x) <- force cond; return $ if x then tt else ff)),
+  ("==", make2ArgFun $ \x -> \y -> makeBool $ x == y),
+  ("<=", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x <= y),
+  (">=", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x >= y),
+  ("<", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x < y),
+  (">", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x > y),
+  ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do cond' <- force cond; return $ if unpackBool cond' then tt else ff)),
   ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg),
   ("toString", make1ArgFunLazy $ \v -> do s <- ishow JustShow v; makeLazy $ return $ VStr s),
   ("print", make1ArgFun $ \(VStr msg) -> VIO (makeLazy $ do liftIO $ putStrLn msg; return $ VUnit)),
@@ -145,6 +156,7 @@ instance Eq Value where
   (VStr a) == (VStr b) = a == b
   (VInt a) == (VInt b) = a == b
   (VDouble a) == (VDouble b) = a == b
-  (VBool a) == (VBool b) = a == b
   (VFunction _ _ _) == _ = error "Cannot compare functions" -- TODO promote this to interpreter error instead of crash
+  VUnit == VUnit = True
+  (VDataType constr1 args1) == (VDataType constr2 args2) = constr1 == constr2 && args1 == args2
   _ == _ = False

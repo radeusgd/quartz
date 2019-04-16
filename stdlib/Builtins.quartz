@@ -4,6 +4,7 @@
   ??? : Forall a. a
   so that the typechecker accepts empty expressions (they will be replaced with native code in evaluation).
 */
+data Bool = True | False;
 // special syntax for defining builtin +,*,-,/
 defop (+) (a: Int, b: Int): Int = ???;
 defop (-) (a: Int, b: Int): Int = ???;

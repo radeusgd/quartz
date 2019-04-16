@@ -6,6 +6,4 @@ def dec(a: Int, b: Int): Int = 10 * a + b; // test
 aaa
 */
 
-def not(x: Bool): Bool = if x then false else true;
-
 def main(): String = toString (dec 4 2);

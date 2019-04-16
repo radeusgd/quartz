@@ -2,6 +2,23 @@ def id[a](x: a):a = x;
 
 def const[a][b](a: a, b: b): a = a;
 
+def not(b: Bool): Bool = case b of {
+    | True -> False
+    | False -> True
+};
+
+def or(a: Bool, b: Bool): Bool = case a of {
+    | True -> True
+    | False -> b
+};
+
+def and(a: Bool, b: Bool): Bool = case a of {
+    | False -> False
+    | True -> b
+};
+
+defop !=[a](x: a, y: a): Bool = not (x == y);
+
 def compose[a][b][c](f: a -> b, g: b -> c): a -> c = \a -> g (f a);
 
 //data List a = Cons a * List a | Nil; // list is a builtin now, but it can also be defined like this, it's builtin only for the syntactic sugar to work
@@ -61,3 +78,5 @@ def fold[a](f: a -> a -> a, z: a, l: List a): a = foldLeft f z l;
 def flip[a][b][c](f: a -> b -> c): b -> a -> c = \b -> (\a -> (f a b));
 
 def reverse[a](l: List a): List a = foldLeft (flip Cons) [] l;
+
+def flatMap[a][b](f: a -> List b, l: List a): List b = flatten (map f l);

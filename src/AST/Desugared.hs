@@ -10,7 +10,6 @@ data Literal
   = LStr String
   | LInt Integer
   | LDouble Double
-  | LBool Bool
   | LUnit
   | LError String
 
@@ -54,8 +53,6 @@ instance Pretty Literal where
   pretty (LStr s) = dquotes $ pretty s
   pretty (LInt i) = pretty i
   pretty (LDouble d) = pretty d
-  pretty (LBool True) = "true"
-  pretty (LBool False) = "false"
   pretty LUnit = "()"
   pretty (LError s) = "error" <+> (dquotes $ pretty s)
 

@@ -376,7 +376,6 @@ literalType :: Literal -> TCM Type
 literalType (LStr _) = return $ Atom "String"
 literalType (LInt _) = return $ Atom "Int"
 literalType (LDouble _) = return $ Atom "Double"
-literalType (LBool _) = return $ Atom "Bool"
 literalType (LUnit) = return $ Atom "()"
 literalType (LError _) = freshFreeType
 
