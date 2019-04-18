@@ -80,3 +80,15 @@ def flip[a][b][c](f: a -> b -> c): b -> a -> c = \b -> (\a -> (f a b));
 def reverse[a](l: List a): List a = foldLeft (flip Cons) [] l;
 
 def flatMap[a][b](f: a -> List b, l: List a): List b = flatten (map f l);
+
+data Either e a = Left e | Right a;
+
+/*
+  This can be used to implement recursion with lambdas, for example:
+  val fact: Int -> Int = fix (\rec -> (\n -> if n == 0 then 1 else (n * (rec (n-1)))));
+  fact 5 == 120
+*/
+def fix[a](F: a -> a): a = {
+    val x: a = F x;
+    x
+};
