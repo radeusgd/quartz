@@ -15,7 +15,7 @@ data LazyValue = Lazy Env (Interpreter Value)
 
 data Value
   = VStr String
-  | VInt Integer
+  | VInt Integer -- TODO probably change into Int
   | VDouble Double
   | VUnit
   -- function: argname, definition_environemnt (my closure), computation
@@ -61,16 +61,55 @@ instance IShow LazyValue where
 type ErrorType = String
 
 type Loc = Int
-data Env = Env { vars :: Map String Loc }
+data Env = Env { vars :: Map String Loc, fuelLimit :: Maybe Int }
 data Thunk = ThunkLazy LazyValue | ThunkComputed Value
 instance Show Thunk where
   show (ThunkLazy _) = "[unevaluated thunk]"
   show (ThunkComputed v) = show v
 
-data Memory = Memory { locs :: Map Loc Thunk, maxloc :: Loc }
+data Memory = Memory { locs :: Map Loc Thunk, maxloc :: Loc, usedFuel :: Int }
 
 type InState = StateT Memory (ExceptT ErrorType IO)
 type Interpreter = ReaderT Env InState
+
+-- TODO maybe make ErrorType into Either String OutOfFuel and handle this more cleanly?
+outOfFuelMessage :: String
+outOfFuelMessage = "~~OUT OF FUEL~~"
+
+isFuelLimitExceeded :: Interpreter Bool
+isFuelLimitExceeded = do
+  used <- gets usedFuel
+  limit <- asks fuelLimit
+  case limit of
+    Nothing -> return False
+    Just l -> return (used >= l)
+
+useFuel :: Int -> Interpreter ()
+useFuel units = do
+  modify $ \s -> s { usedFuel = usedFuel s + units }
+  used <- gets usedFuel
+  limit <- asks fuelLimit
+  -- traceShowM ("Using ", units, "; ", used, "/", limit)
+  exceeded <- isFuelLimitExceeded
+  if exceeded then throwError outOfFuelMessage else return ()
+
+withFuelLimit :: Int -> Interpreter a -> Interpreter a
+withFuelLimit units m = do
+  used <- gets usedFuel
+  local (\r -> r { fuelLimit = calcNewLimit used (fuelLimit r) }) $ m
+  where
+    calcNewLimit used currentLimit = let newLimit = used + units in
+      case currentLimit of
+        Nothing -> Just newLimit
+        Just someLimit -> Just $ min someLimit newLimit
+
+handleOutOfFuel :: Interpreter a -> Interpreter (Maybe a)
+handleOutOfFuel m = (Just <$> m) `catchError` handleError where
+  handleError msg = if msg /= outOfFuelMessage then throwError msg -- rethrow other errors
+    else do
+       exceeded <- isFuelLimitExceeded
+       if exceeded then throwError msg
+       else return Nothing -- if limit is not exceeded at our level, recover from error, but return Nothing as the inner computation has failed
 
 -- traceEnv :: Env -> Interpreter ()
 -- traceEnv e = do
@@ -81,10 +120,13 @@ type Interpreter = ReaderT Env InState
 --     bind e m = fmap (\loc -> M.lookup loc m) (vars e)
 
 emptyEnv :: Env
-emptyEnv = Env M.empty
+emptyEnv = Env M.empty Nothing
 
 emptyMemory :: Memory
-emptyMemory = Memory M.empty 0
+emptyMemory = Memory M.empty 0 0
+
+inOtherEnv :: Env -> Interpreter a -> Interpreter a
+inOtherEnv env = local (\r -> env { fuelLimit = fuelLimit r} ) -- change to different env but preserve the fuelLimit
 
 fromLiteral :: Desugared.Literal -> Interpreter Value
 fromLiteral (LStr s) = return $ VStr s
@@ -144,7 +186,7 @@ setValue' loc val = modify go where
   go s = s { locs = M.insert loc (ThunkLazy val) (locs s) }
 
 force :: LazyValue -> Interpreter Value
-force (Lazy e vi) = local (\_ -> e) vi
+force (Lazy e vi) = inOtherEnv e vi
 
 makeLazy :: Interpreter Value -> Interpreter LazyValue
 makeLazy i = do
@@ -161,7 +203,7 @@ processDefinition :: Env -> Declaration -> Interpreter Env
 processDefinition env (Function name args _ exp) = do
   loc <- alloc
   let env' = bind name loc env
-  val <- local (\_ -> env') $ buildFunction args exp
+  val <- inOtherEnv env' $ buildFunction args exp
   setValue loc val
   return env' where
     buildFunction :: [String] -> Exp -> Interpreter LazyValue
@@ -178,7 +220,7 @@ processDefinition env (DataType name typeargs cases) = do -- TODO are typeargs h
   locs <- mapM (\_ -> alloc) cases
   let casesWithLocs = zip cases locs
   let env' = List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind name loc env) env casesWithLocs
-  local (\_ -> env') $ mapM_ defineCase casesWithLocs
+  inOtherEnv env' $ mapM_ defineCase casesWithLocs
   return env'
   where
     defineCase :: (DataTypeCase, Loc) -> Interpreter ()
@@ -195,7 +237,7 @@ interpret (EConst  c) = makeLazy $ fromLiteral c
 interpret (EBlock decls e) = do
   env <- ask
   innerEnv <- foldM processDefinition env decls
-  local (\_ -> innerEnv) $ interpret e
+  inOtherEnv innerEnv $ interpret e
 interpret (EVar v) = makeLazy $ readVar v
 interpret (ELambda argname exp) = do
   env <- ask
@@ -217,8 +259,9 @@ interpret (ECaseOf e cases) = do
 interpret (EApplication fun arg) = makeLazy $ do
   fun' <- interpret fun >>= force
   arg' <- interpret arg
+  useFuel 1
   case fun' of
-    (VFunction argname funEnv computation) -> local (\_ -> funEnv) $
+    (VFunction argname funEnv computation) -> inOtherEnv funEnv $
       withVal argname arg' computation >>= force -- TODO not sure if want to leave it like this
     _ -> throwError $ "Trying to apply to a non-function (" ++ show fun ++ ") (why didn't typechecker catch this?)"
 
@@ -250,7 +293,7 @@ withDeclared [] i = i
 withDeclared (h:t) i = do
   env <- ask
   env' <- processDefinition env h
-  local (\_ -> env') $ withDeclared t i
+  inOtherEnv env' $ withDeclared t i
 
 execInterpreter :: Env -> Memory -> Interpreter a -> IO (Either ErrorType (a, Memory))
 execInterpreter env mem i = runExceptT $ runStateT (runReaderT i env) mem

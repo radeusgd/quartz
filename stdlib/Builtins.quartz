@@ -25,6 +25,7 @@ defop >>= [a][b](m: IO a, f: (a -> IO b)): IO b = ???;
 defop >>[a][b](x: IO a, y: IO b): IO b = ???;
 def return[a](x: a): IO a = ???;
 def limit[a](maxApplications: Int, expr: a): Maybe a = ???;
+def countInstructions[a](expr: a): Int = ???; // TODO make it return (a, Int)
 def seq[a][b](a: a, b: b): b = ???;
 
 data List a = Cons a * List a | Nil;

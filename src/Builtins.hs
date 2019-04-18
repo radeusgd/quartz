@@ -8,12 +8,14 @@ import qualified Quartz.Syntax.AbsQuartz as Abs
 import qualified Quartz.Syntax.ParQuartz as Par
 import qualified Quartz.Syntax.ErrM as Err
 import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.Except
 import AST.Desugared
 import Passes.Desugar
 import System.IO
 import Interpreter
 import Linker
+import Debug.Trace
 
 loadBuiltinDecls :: IO [Declaration]
 loadBuiltinDecls = do
@@ -41,7 +43,7 @@ builtinsEnv = do
 withBuiltins :: Interpreter a -> Interpreter a
 withBuiltins m = do
   env <- builtinsEnv
-  local (\_ -> env) m
+  inOtherEnv env m
 
 -- import qualified Data.Map as M
 -- import AST.Typed
@@ -90,6 +92,10 @@ makeNothing = VDataType "Nothing" []
 makeJust :: Value -> Value
 makeJust v = VDataType "Just" [v]
 
+makeMaybe :: Maybe Value -> Value
+makeMaybe (Just v) = makeJust v
+makeMaybe (Nothing) = makeNothing
+
 makeNil :: Value
 makeNil = VDataType "Nil" []
 
@@ -128,7 +134,8 @@ builtins = [
   (">>=", make2ArgFunLazy sequenceIO),
   (">>", make2ArgFunLazy sequenceIODiscard),
   ("return", make1ArgFunLazy $ \v -> makeLazy $ return $ VIO (return v)),
-  ("limit", make2ArgFunLazy $ \limit' -> \v -> makeLazy $ return $ makeNothing), -- TODO actually implement this
+  ("limit", make2ArgFunLazy runWithLimit),
+  ("countInstructions", make1ArgFunLazy countInstructions),
   ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b),
   ("Nil", makeNil),
   ("Cons", make2ArgFun makeCons)
@@ -138,7 +145,7 @@ builtins = [
     (VIO m) <- force m' -- compute 1st arg
     left <- m >>= force -- force first IO computation
     (VFunction argname funEnv computation) <- force f' -- compute 2nd arg
-    (VIO res) <- local (\_ -> funEnv) $ withVal argname (Lazy undefined $ return left) computation >>= force -- run 2nd arg with 1st's argument (force IO) and unpack it's result
+    (VIO res) <- inOtherEnv funEnv $ withVal argname (Lazy undefined $ return left) computation >>= force -- run 2nd arg with 1st's argument (force IO) and unpack it's result
     res >>= force
   sequenceIODiscard :: LazyValue -> LazyValue -> Interpreter LazyValue
   sequenceIODiscard a b = makeLazy $ return $ VIO $ makeLazy $ do
@@ -147,6 +154,19 @@ builtins = [
     -- the goal is to have print "a" >> print "b" work correctly, but ideally (return ???) >> print "a" should not crash (which it does now)
     (VIO ib) <- force b
     ib >>= force
+  runWithLimit :: LazyValue -> LazyValue -> Interpreter LazyValue
+  runWithLimit llimit lval = makeLazy $ do
+    (VInt limit) <- force llimit
+    -- traceShowM ("Will set limit to ", limit)
+    result <- handleOutOfFuel $ withFuelLimit (fromInteger limit) (force lval)
+    -- traceShowM ("Limit of ", limit, " has ended")
+    return $ makeMaybe result
+  countInstructions :: LazyValue -> Interpreter LazyValue
+  countInstructions lval = makeLazy $ do
+    start <- gets usedFuel
+    _ <- force lval -- TODO change to returning a tuple with result
+    end <- gets usedFuel
+    return $ VInt $ fromIntegral (end - start)
 
 -- def print(msg: String): IO () = ???;
 -- def readLine() : IO String = ???;
