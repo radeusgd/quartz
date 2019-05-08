@@ -139,17 +139,20 @@ getJustOrError :: MonadError e m => e -> Maybe a -> m a
 getJustOrError _ (Just v) = return v
 getJustOrError err Nothing = throwError err
 
-readThunk :: String -> Interpreter (Loc, Thunk)
+readThunk :: QualifiedIdent -> Interpreter (Loc, Thunk)
 readThunk v = do
   env <- asks vars
-  let locM = M.lookup v env
-  loc <- getJustOrError ("Variable " ++ v ++ " not in scope (why typecheck didn't catch this?)") locM
+  let locM = case v of
+        -- TODO new lookup rules, new env for modules and qualified names!
+        IDefault ident -> M.lookup ident env
+        IQualified mod ident -> error "TODO"
+  loc <- getJustOrError ("Variable " ++ show v ++ " not in scope (why typecheck didn't catch this?)") locM
   mem <- gets locs
   let valM = M.lookup loc mem
-  thunk <- getJustOrError ("Memory location for variable " ++ v ++ " seems to be not allocated, this shouldn't happen.") valM
+  thunk <- getJustOrError ("Memory location for variable " ++ show v ++ " seems to be not allocated, this shouldn't happen.") valM
   return (loc, thunk)
 
-readVar :: String -> Interpreter Value
+readVar :: QualifiedIdent -> Interpreter Value
 readVar v = do
   (loc, thunk) <- readThunk v
   case thunk of
@@ -159,7 +162,7 @@ readVar v = do
       modify (\s -> s { locs = M.insert loc (ThunkComputed val) (locs s) })
       return val
 
-readVarLazy :: String -> Interpreter LazyValue
+readVarLazy :: QualifiedIdent -> Interpreter LazyValue
 readVarLazy v = makeLazy $ readVar v
 
 alloc :: Interpreter Loc
@@ -196,7 +199,7 @@ makeLazy i = do
 buildNArgFunction :: Int -> ([LazyValue] -> Interpreter LazyValue) -> Interpreter LazyValue
 buildNArgFunction 0 builder = builder []
 buildNArgFunction n builder = makeLazy $ return $ VFunction "x" emptyEnv $ do
-  x <- readVarLazy "x"
+  x <- readVarLazy $ IDefault "x"
   buildNArgFunction (n - 1) (\args -> builder (x:args))
 
 processDefinition :: Env -> Declaration -> Interpreter Env
@@ -250,7 +253,9 @@ interpret (ECaseOf e cases) = do
   where
     matchCase constructorName dataargs [] =
       throwError "Non-exhaustive pattern match"
-    matchCase constructorName dataargs (ECase name args e:t) =
+    -- TODO add support for pattern matching from different modules!
+    matchCase _ _ (ECase (IQualified _ _) _ _:_) = error "TODO qualified pattern matching"
+    matchCase constructorName dataargs (ECase (IDefault name) args e:t) =
       if name /= constructorName then matchCase constructorName dataargs t
       else if length dataargs /= length args then throwError "Datatype arguments count mismatch (data representation and case match have different number of arguments), shouldn't ever happen"
       else do

@@ -1,7 +1,8 @@
 module Builtins(
   loadBuiltinDecls,
   withBuiltins,
-  builtinsEnv
+  builtinsEnv,
+  builtinsModuleName
                ) where
 
 import qualified Quartz.Syntax.AbsQuartz as Abs
@@ -16,11 +17,12 @@ import System.IO
 import Interpreter
 import Linker
 import Debug.Trace
+import Constants
 
 loadBuiltinDecls :: IO [Declaration]
 loadBuiltinDecls = do
   stdlib <- findStdLib
-  fd <- openFile (stdlib ++ "/Builtins.quartz") ReadMode
+  fd <- openFile (stdlib ++ "/" ++ builtinsModuleName ++ ".quartz") ReadMode
   contents <- hGetContents fd
   let toks = Par.myLexer contents
   let ed = (\(Abs.Prog decls) -> decls) <$> Par.pProgram toks
@@ -54,36 +56,36 @@ withBuiltins m = do
 
 make1ArgFunLazy :: (LazyValue -> Interpreter LazyValue) -> Value
 make1ArgFunLazy f = VFunction "x" emptyEnv $ do
-  x <- readVarLazy "x"
+  x <- readVarLazy $ IDefault "x"
   f x
 
 make2ArgFunLazy :: (LazyValue -> LazyValue -> Interpreter LazyValue) -> Value
 make2ArgFunLazy f = VFunction "x" emptyEnv $ do
-  x <- readVarLazy "x"
+  x <- readVarLazy $ IDefault "x"
   makeLazy $ return $ VFunction "y" emptyEnv $ do
-    y <- readVarLazy "y"
+    y <- readVarLazy $ IDefault "y"
     f x y
 
 make3ArgFunLazy :: (LazyValue -> LazyValue -> LazyValue -> Interpreter LazyValue) -> Value
 make3ArgFunLazy f = VFunction "z" emptyEnv $ do
-  z <- readVarLazy "z"
+  z <- readVarLazy $ IDefault "z"
   makeLazy $ return $ make2ArgFunLazy (f z)
 
 make1ArgFun :: (Value -> Value) -> Value
 make1ArgFun f = VFunction "x" emptyEnv $ do
-  x <- readVar "x"
+  x <- readVar $ IDefault "x"
   makeLazy $ return $ f x
 
 make2ArgFun :: (Value -> Value -> Value) -> Value
 make2ArgFun f = VFunction "x" emptyEnv $ do
-  x <- readVar "x"
+  x <- readVar $ IDefault "x"
   makeLazy $ return $ VFunction "y" emptyEnv $ do
-    y <- readVar "y"
+    y <- readVar $ IDefault "y"
     makeLazy $ return $ f x y
 
 make3ArgFun :: (Value -> Value -> Value -> Value) -> Value
 make3ArgFun f = VFunction "z" emptyEnv $ do
-  z <- readVar "z"
+  z <- readVar $ IDefault "z"
   makeLazy $ return $ make2ArgFun (f z)
 
 makeNothing :: Value
@@ -127,7 +129,7 @@ builtins = [
   ("<", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x < y),
   (">", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x > y),
   ("if_then_else", (make3ArgFunLazy $ \cond -> \tt -> \ff -> do cond' <- force cond; return $ if unpackBool cond' then tt else ff)),
-  ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar "msg"; throwError msg),
+  ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar $ IDefault "msg"; throwError msg),
   ("toString", make1ArgFunLazy $ \v -> do s <- ishow JustShow v; makeLazy $ return $ VStr s),
   ("print", make1ArgFun $ \(VStr msg) -> VIO (makeLazy $ do liftIO $ putStrLn msg; return $ VUnit)),
   ("readLine", VIO (makeLazy $ VStr <$> (liftIO getLine))),

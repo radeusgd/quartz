@@ -78,7 +78,7 @@ runExtract fname = do
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
 runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
-runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar "main") >>= ishow RunIO
+runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO
 
 runRun :: String -> IO ()
 runRun fname = do

@@ -81,14 +81,17 @@ emptyTcState = TcState 0
 --   env <- asks eBindings
 --   trace ("[ENV] " ++ show env) $ return ()
 
-readVar' :: Ident -> TCM QualifiedType
+readVar' :: QualifiedIdent -> TCM QualifiedType
 readVar' v = do
   env <- asks eBindings
-  case M.lookup v env of
-    Just t -> return t
-    Nothing -> throwErrorWithContext $ UnboundVariable v
+  case v of
+    IDefault ident ->
+      case M.lookup ident env of
+        Just t -> return t
+        Nothing -> throwErrorWithContext $ UnboundVariable ident
+    IQualified mod ident -> error "TODO"
 
-readVar :: Ident -> TCM Type
+readVar :: QualifiedIdent -> TCM Type
 readVar = readVar' >=> instantiate
 
 withVar :: Ident -> QualifiedType -> TCM a -> TCM a
@@ -142,9 +145,10 @@ substitute m (Construction a b) = Construction (substitute m a) (substitute m b)
 substitute m v@(FreeVariable i) = fromMaybe v $ M.lookup i m
 
 substituteAtoms :: M.Map Ident Type -> Type -> Type
-substituteAtoms m a@(Atom i) = case M.lookup i m of
+substituteAtoms m a@(Atom (IDefault i)) = case M.lookup i m of
   Just t -> t -- replace atom if it's in substitution map
   Nothing -> a -- otherwise, leave it as-is
+substituteAtoms m a@(Atom _) = a
 substituteAtoms m (Abstraction a b) = Abstraction (substituteAtoms m a) (substituteAtoms m b)
 substituteAtoms m (Construction a b) = Construction (substituteAtoms m a) (substituteAtoms m b)
 substituteAtoms m fp@(FreeVariable _) = fp
@@ -161,7 +165,8 @@ generalize tt = do
   let allVars = freeAtoms `Set.union` Set.fromList vars
   return $ ForAll (Set.toList allVars) tt'
   where
-    allAtoms (Atom a) = Set.singleton a
+    allAtoms (Atom (IDefault a)) = Set.singleton a
+    allAtoms (Atom _) = Set.empty
     allAtoms (Abstraction a b) = allAtoms a `Set.union` allAtoms b
     allAtoms (Construction a b) = allAtoms a `Set.union` allAtoms b
     allAtoms (FreeVariable _) = Set.empty
@@ -172,7 +177,7 @@ closeType tt =
   let ForAll vars tt' = closeType' (Set.toList $ freeTypeVariables tt) tt in
     ForAll (Set.toList (freeAtoms tt' `Set.union` Set.fromList vars)) tt'
     where
-      freeAtoms (Atom i@('\'' : _)) = Set.singleton i
+      freeAtoms (Atom (IDefault i@('\'' : _))) = Set.singleton i
       freeAtoms (Atom _) = Set.empty
       freeAtoms (Abstraction a b) = Set.union (freeAtoms a) (freeAtoms b)
       freeAtoms (Construction a b) = Set.union (freeAtoms a) (freeAtoms b)
@@ -181,7 +186,7 @@ closeType tt =
 closeType' :: [Integer] -> Type -> QualifiedType
 closeType' ftv tt = ForAll vars tt' where
    vars = take (length ftv) atomsForFreeVars
-   subst = M.fromList $ zip ftv $ map Atom vars
+   subst = M.fromList $ zip ftv $ map (Atom . IDefault) vars
    tt' = substitute subst tt
 
 freshFreeType :: TCM Type
@@ -194,7 +199,7 @@ freshRigidType :: String -> TCM Type
 freshRigidType str = do
   i <- gets tcsNameSupply
   modify $ \s -> s { tcsNameSupply = i + 1 }
-  return $ Atom ('\'' : show i ++ str)
+  return $ Atom $ IDefault ('\'' : show i ++ str)
 
 instantiate' :: QualifiedType -> (String -> TCM Type) -> TCM (Type, [Type])
 instantiate' (ForAll vars ttype) freshType = do
@@ -361,10 +366,10 @@ withDeclaration' (DataType dataTypeName typeArgs cases) m = do
   return (r, emptySubst) -- no substitutions here as types are already generic, TODO: right?
   where
     withConstructor (DataTypeCase name argtypes) =
-      withVar name $ ForAll typeArgs (buildConstructor argtypes $ dataTypeInstanceType typeArgs) -- TODO polymorphic datatypes
+      withVar name $ ForAll typeArgs (buildConstructor argtypes $ dataTypeInstanceType (map IDefault typeArgs)) -- TODO polymorphic datatypes
     buildConstructor [] resultType = resultType
     buildConstructor (h:t) resultType = Abstraction h (buildConstructor t resultType)
-    dataTypeInstanceType args = List.foldl' (\t -> \a -> Construction t (Atom a)) (Atom dataTypeName) args
+    dataTypeInstanceType args = List.foldl' (\t -> \a -> Construction t (Atom a)) (Atom $ IDefault dataTypeName) args -- TODO probably want to add module here
 
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e
@@ -373,10 +378,10 @@ inferBlock (d : tail) e = do
   return (substitute s2 bl, s1 <#> s2)
 
 literalType :: Literal -> TCM Type
-literalType (LStr _) = return $ Atom "String"
-literalType (LInt _) = return $ Atom "Int"
-literalType (LDouble _) = return $ Atom "Double"
-literalType (LUnit) = return $ Atom "()"
+literalType (LStr _) = return $ Atom $ IDefault "String"
+literalType (LInt _) = return $ Atom $ IDefault "Int"
+literalType (LDouble _) = return $ Atom $ IDefault "Double"
+literalType (LUnit) = return $ Atom $ IDefault "()"
 literalType (LError _) = freshFreeType
 
 inferE :: Exp -> TCM Type

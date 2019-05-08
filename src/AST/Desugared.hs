@@ -5,6 +5,11 @@ import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.String
 
 type Ident = String
+data QualifiedIdent = IQualified Ident Ident | IDefault Ident deriving Eq
+
+instance Show QualifiedIdent where
+  show (IQualified mod ident) = mod ++ "." ++ ident
+  show (IDefault ident) = ident
 
 data Literal
   = LStr String
@@ -14,7 +19,7 @@ data Literal
   | LError String
 
 data Type
-  = Atom Ident
+  = Atom QualifiedIdent
   | Abstraction Type Type
   | Construction Type Type
   | FreeVariable Integer
@@ -41,13 +46,16 @@ declarationName (DataType name _ _) = name
 
 data Exp
   = EApplication Exp Exp
-  | EVar Ident
+  | EVar QualifiedIdent
   | EConst Literal
   | ELambda Ident Exp
   | ECaseOf Exp [ECase]
   | EBlock [Declaration] Exp
 
-data ECase = ECase Ident [Ident] Exp
+data ECase = ECase QualifiedIdent [Ident] Exp
+
+instance Pretty QualifiedIdent where
+  pretty = pretty . show
 
 instance Pretty Literal where
   pretty (LStr s) = dquotes $ pretty s

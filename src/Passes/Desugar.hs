@@ -8,7 +8,7 @@ import Data.Maybe
 -- import Data.String.Utils
 import Quartz.Syntax.AbsQuartz as A
 import AST.Desugared as D
-
+import Constants
 
 applyArgsTo :: D.Exp -> [D.Exp] -> D.Exp
 applyArgsTo fun [] = fun
@@ -18,9 +18,9 @@ desugarExpression :: A.Exp -> D.Exp
 desugarExpression (A.EApp a b) =
   D.EApplication (desugarExpression a) (desugarExpression b)
 desugarExpression (A.ECustomOp a (CustomOperator op) b) =
-  applyArgsTo (D.EVar op) [desugarExpression a, desugarExpression b]
+  applyArgsTo (D.EVar $ IDefault op) [desugarExpression a, desugarExpression b]
 desugarExpression (A.EIfThenElse e tt ff) = -- thanks to laziness we translate if into a casual function
-  applyArgsTo (D.EVar "if_then_else") [desugarExpression e, desugarExpression tt, desugarExpression ff]
+  applyArgsTo (D.EVar $ IQualified builtinsModuleName "if_then_else") [desugarExpression e, desugarExpression tt, desugarExpression ff]
 desugarExpression (A.EAdd a b) =
   desugarExpression (A.ECustomOp a (CustomOperator "+") b)
 desugarExpression (A.ESub a b) =
@@ -29,7 +29,7 @@ desugarExpression (A.EMul a b) =
   desugarExpression (A.ECustomOp a (CustomOperator "*") b)
 desugarExpression (A.EDiv a b) =
   desugarExpression (A.ECustomOp a (CustomOperator "/") b)
-desugarExpression (A.EVar (QIdent (_, v))) = D.EVar v
+desugarExpression (A.EVar i) = D.EVar $ desugarQualified i
 desugarExpression (A.EStr s) = D.EConst $ LStr s where
   -- desugarStringLiteral str = replaceAll [("\\n", "\n"), ("\\\\", "\\"), ("\\\"", "\""), ("\\t", "\t")] str
   -- replaceAll reps str = foldr (uncurry replace) str reps
@@ -49,17 +49,21 @@ desugarExpression (A.ELambda (QIdent (_, v)) e) = D.ELambda v (desugarExpression
 desugarExpression (A.EDo clauses) = desugarDoNotation clauses
 desugarExpression (A.EList elems) = desugarList elems
 
+desugarQualified :: A.QualifiedIdentifier -> D.QualifiedIdent
+desugarQualified (A.Qualified mod ident) = IQualified (desugarQIdent mod) (desugarQIdent ident)
+desugarQualified (A.DefaultScope ident) = IDefault (desugarQIdent ident)
+
 desugarQIdent :: QIdent -> Ident
 desugarQIdent (QIdent (_, i)) = i
 
 desugarCase :: A.Case -> D.ECase
-desugarCase (A.SimpleCase name args e) = D.ECase (desugarQIdent name) (map desugarQIdent args) (desugarExpression e)
+desugarCase (A.SimpleCase name args e) = D.ECase (desugarQualified name) (map desugarQIdent args) (desugarExpression e)
 
 desugarType :: A.Type -> D.Type
-desugarType (A.Atom (QIdent (_, name))) = D.Atom name
-desugarType A.UnitAtom = D.Atom "()"
-desugarType (A.Constructor (QIdent (_, name)) args) =
-  desugarConstructor (D.Atom name) (map desugarType args)
+desugarType (A.Atom name) = D.Atom $ desugarQualified name
+desugarType A.UnitAtom = D.Atom $ IDefault "()"
+desugarType (A.Constructor name args) =
+  desugarConstructor (D.Atom $ desugarQualified name) (map desugarType args)
   where
     desugarConstructor tt [] = tt
     desugarConstructor tt (h:t) = desugarConstructor (D.Construction tt h) t
@@ -116,17 +120,17 @@ desugarDoNotation [DoLet _ e] = desugarExpression e
 desugarDoNotation (DoExp e :t) =
   (D.EApplication
    (D.EApplication
-    (D.EVar ">>") (desugarExpression e))
+    (D.EVar $ IQualified builtinsModuleName ">>") (desugarExpression e))
    (desugarDoNotation t)
   )
 desugarDoNotation (DoLet (QIdent (_, v)) e :t) =
   (D.EApplication
    (D.EApplication
-    (D.EVar ">>=") (desugarExpression e))
+    (D.EVar $ IQualified builtinsModuleName ">>=") (desugarExpression e))
    (D.ELambda v (desugarDoNotation t))
   )
 
 desugarList :: [A.Exp] -> D.Exp
-desugarList [] = D.EVar "Nil"
+desugarList [] = D.EVar $ IQualified builtinsModuleName "Nil"
 desugarList (h:t) =
-  (D.EApplication (D.EApplication (D.EVar "Cons") (desugarExpression h)) (desugarList t))
+  (D.EApplication (D.EApplication (D.EVar $ IQualified builtinsModuleName "Cons") (desugarExpression h)) (desugarList t))

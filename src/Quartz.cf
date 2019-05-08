@@ -4,6 +4,9 @@ comment "/*" "*/" ;
 position token QIdent (letter (letter | digit | '_')*) ;
 token CustomOperator ('>' | '<' | '=' | '$' | '!')('?' | '>' | '<' | '=' | '$' | '!' | '+' | '*' | '/' | '-')* | ('(''+'')') | ('(''*'')') | ('(''/'')') | ('(''-'')');
 
+Qualified. QualifiedIdentifier ::= QIdent "." QIdent ;
+DefaultScope. QualifiedIdentifier ::= QIdent ;
+
 Prog. Program ::= [Declaration] ;
 
 Func. Declaration ::= "def" QIdent [TypeQualifier] "(" [Arg] ")" ":" Type "=" Exp ;
@@ -32,10 +35,10 @@ separator TypeQualifier "" ;
 terminator Declaration ";" ;
 separator  Arg "," ;
 
-Atom. Type2 ::= QIdent;
+Atom. Type2 ::= QualifiedIdentifier;
 UnitAtom. Type2 ::= "()" ;
 Abstraction. Type ::= Type2 "->" Type ;
-Constructor. Type ::= QIdent [Type2] ;
+Constructor. Type ::= QualifiedIdentifier [Type2] ;
 separator nonempty Type2 "" ;
 coercions Type 2 ;
 -- TODO complex types, typeclasses
@@ -48,7 +51,7 @@ EAdd. Exp3 ::= Exp3 "+" Exp4 ;
 ESub. Exp3 ::= Exp3 "-" Exp4 ;
 EMul. Exp4 ::= Exp4 "*" Exp5 ;
 EDiv. Exp4 ::= Exp4 "/" Exp5 ;
-EVar. Exp5 ::= QIdent ;
+EVar. Exp5 ::= QualifiedIdentifier ;
 EStr. Exp5 ::= String ;
 EInt. Exp5 ::= Integer ;
 ENegInt. Exp2 ::= "-" Integer ;
@@ -63,7 +66,7 @@ EDo. Exp5 ::= "do" "{" [DoClause] "}" ;
 separator Exp "," ;
 coercions Exp 5 ;
 
-SimpleCase. Case ::= "|" QIdent [QIdent] "->" Exp ;
+SimpleCase. Case ::= "|" QualifiedIdentifier [QIdent] "->" Exp ;
 separator Case "" ;
 separator QIdent "" ;
 
