@@ -34,12 +34,15 @@ parseDecl str = desugarDeclaration <$> parse Par.pDeclaration str
 parseExp :: String -> Either String Exp
 parseExp str = desugarExpression <$> parse Par.pExp str
 
-parseExpOrDecl :: String -> Either String (Either Declaration Exp)
-parseExpOrDecl str = case (parse Par.pDeclaration str, parse Par.pExp str) of
-  (Right d, Left _) -> return $ Left $ desugarDeclaration d
-  (Left _, Right e) -> return $ Right $ desugarExpression e
-  (Right _, Right _) -> throwError $ "Ambiguous parse: cannot discern expression from declaration"
-  (Left e, Left d) -> throwError $ e ++ "\n/\n" ++ d
+data ParsedLine = PExp Exp | PDecl Declaration | PImport Ident | PError String
+
+parseLine :: String -> ParsedLine -- TODO IMPORT
+parseLine str = case (parse Par.pDeclaration str, parse Par.pExp str, Left "") of
+  (Right d, Left _, Left _) -> PDecl $ desugarDeclaration d
+  (Left _, Right e, Left _) -> PExp $ desugarExpression e
+  (Left _, Left _, Right _) -> error "TODO"
+  (Left e, Left d, Left i) -> PError $ e ++ "\n/\n" ++ d ++ "\n/\n" ++ i
+  _ -> PError $ "Ambiguous parse: cannot discern between expression, declaration and import"
 
 showingError :: Show e => Either e a -> Either String a
 showingError (Right a) = Right a
@@ -47,38 +50,26 @@ showingError (Left e) = Left $ show e
 
 runDecl :: Declaration -> Repl ()
 runDecl decl = do
-  RState tenv env mem <- get
-  case evalInfer $ extendEnvironment tenv [decl] of
-    Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-    Right tenv' -> do
-      res <- liftIO $ execInterpreter env mem (processDefinition env decl)
-      case res of
-        Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
-        Right (env', mem') -> do
-          modify (\_ -> RState tenv' env' mem')
-          liftIO $ putStrLn $ (declarationName decl) ++ " defined"
+  n <- introduceDeclaration decl
+  case n of
+    Left (RuntimeError err) -> liftIO $ putStrLn $ err
+    Right name -> liftIO $ putStrLn $ name ++ " defined"
 
 runExp :: Exp -> Repl ()
-runExp exp = do
-  RState tenv env mem <- get
-  case evalInfer $ withEnvironment tenv $ inferExpType exp of
-    Left err -> liftIO $ putStrLn $ "Type error: " ++ show err
-    Right _ -> do
-      res <- liftIO $ execInterpreter env mem (interpret exp >>= ishow RunIO)
-      case res of
-        Left err -> liftIO $ putStrLn $ "Runtime error: " ++ err
-        Right (res, mem') -> do
-          modify (\s -> s { rsMem = mem' })
-          liftIO $ putStrLn res
+runExp e = do
+  e' <- showExp e
+  case e' of
+    Left (RuntimeError err) -> liftIO $ putStrLn $ err
+    Right str -> liftIO $ putStrLn str
 
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()
 cmd input = do
-  case parseExpOrDecl input of
-    Left err -> liftIO $ putStrLn $ "Parse error: " ++ err
-    Right (Left decl) -> runDecl decl
-    Right (Right exp) -> runExp exp
-  return ()
+  case parseLine input of
+    PError err -> liftIO $ putStrLn $ "Parse error: " ++ err
+    PDecl decl -> runDecl decl
+    PExp exp -> runExp exp
+    PImport _ -> error "TODO"
 
 completer = Prefix (wordCompleter complete) [(":load", fileCompleter)]
 
@@ -131,5 +122,7 @@ ini = liftIO $ putStrLn "Welcome to the Quartz REPL!"
 
 runRepl :: IO ()
 runRepl = do
-  initState <- makeInitialState
-  evalStateT (evalRepl "$> " cmd options completer ini) initState
+  init <- runExceptT makeInitialState
+  case init of
+    Left (RuntimeError err) -> error $ "Error initializing REPL: " ++ err
+    Right initState -> evalStateT (evalRepl "$> " cmd options completer ini) initState
