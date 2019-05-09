@@ -18,6 +18,7 @@ import qualified Data.Map as M
 import qualified Data.List as List
 import qualified Data.Set as Set
 import Data.Maybe
+import qualified ModuleMap as MM
 
 -- import Debug.Trace
 
@@ -46,14 +47,14 @@ instance Show TypeError where
 instance Show a => Show (WithContext a) where
   show (WithContext a ctx) = show a ++ " in " ++ ctx
 
-type TypeEnv = M.Map Ident QualifiedType
+type TypeEnv = MM.ModuleMap QualifiedType
 emptyTypeEnv :: TypeEnv
-emptyTypeEnv = M.empty
+emptyTypeEnv = MM.empty
 
 data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFree :: Set.Set Integer, eFreeAtoms :: Set.Set Ident } -- TODO cleanup these
 
 emptyEnv :: Env
-emptyEnv = Env M.empty "???" Set.empty Set.empty
+emptyEnv = Env MM.empty "???" Set.empty Set.empty
 
 type Subst = M.Map Integer Type
 type TCM a = StateT TcState (ReaderT Env (Either (WithContext TypeError))) a
@@ -84,20 +85,18 @@ emptyTcState = TcState 0
 readVar' :: QualifiedIdent -> TCM QualifiedType
 readVar' v = do
   env <- asks eBindings
-  case v of
-    IDefault ident ->
-      case M.lookup ident env of
-        Just t -> return t
-        Nothing -> throwErrorWithContext $ UnboundVariable ident
-    IQualified mod ident -> error "TODO"
+  case MM.lookup v env of
+    Left err -> throwErrorWithContext $ UnboundVariable err
+    Right res -> return res
 
 readVar :: QualifiedIdent -> TCM Type
 readVar = readVar' >=> instantiate
 
+-- TODO local vs qualified
 withVar :: Ident -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
   introduceType :: Ident -> QualifiedType -> Env -> Env
-  introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (M.insert i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
+  introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (MM.insertLocal i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
 
 withVars :: [(Ident, QualifiedType)] -> TCM a -> TCM a
 withVars lst m = foldr (uncurry withVar) m lst

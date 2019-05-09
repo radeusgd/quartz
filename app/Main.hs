@@ -59,14 +59,14 @@ typeCheck decls = do
 runCheck :: String -> IO ()
 runCheck fname = do
   parsed <- parseFile' fname
-  decls <- handleSyntaxError parsed
+  (imports, decls) <- handleSyntaxError parsed
   let desugared = map desugarDeclaration decls
   _ <- typeCheck desugared
   exitSuccess
 
 runExtract :: String -> IO ()
 runExtract fname = do
-  decls <- parseFile fname >>= handleSyntaxError
+  (imports, decls) <- parseFile fname >>= handleSyntaxError
   mapM_ printSignature decls
   exitSuccess
   where
@@ -83,7 +83,7 @@ runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (
 runRun :: String -> IO ()
 runRun fname = do
   parsed <- parseFile' fname
-  decls <- handleSyntaxError parsed
+  (imports, decls) <- handleSyntaxError parsed
   let desugared = map desugarDeclaration decls
   typed <- typeCheck desugared
   res <- runMain typed
@@ -95,7 +95,7 @@ runRun fname = do
 runDebug :: String -> IO ()
 runDebug fname = do
   parsed <- parseFile' fname
-  decls <- handleSyntaxError parsed
+  (imports, decls) <- handleSyntaxError parsed
   putStrLn "[Linearized AST]"
   mapM_ (putStrLn . printTree) decls
   let desugared = map desugarDeclaration decls

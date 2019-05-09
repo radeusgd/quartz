@@ -25,7 +25,7 @@ loadBuiltinDecls = do
   fd <- openFile (stdlib ++ "/" ++ builtinsModuleName ++ ".quartz") ReadMode
   contents <- hGetContents fd
   let toks = Par.myLexer contents
-  let ed = (\(Abs.Prog decls) -> decls) <$> Par.pProgram toks
+  let ed = (\(Abs.Prog [] decls) -> decls) <$> Par.pProgram toks
   case ed of
     Err.Bad s -> error $ "Fatal error: syntax error in Builtins.quartz: " ++ s
     Err.Ok decls -> return $ map desugarDeclaration decls

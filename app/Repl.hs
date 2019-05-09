@@ -10,6 +10,7 @@ import AST.Desugared
 import Builtins
 import Interpreter
 import AppCommon
+import Runtime
 
 import System.Console.Repline
 import System.Exit ( exitFailure, exitSuccess )
@@ -17,22 +18,8 @@ import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import Data.List
+import qualified ModuleMap as MM
 import qualified Data.Map as Map
-
-
-data RState = RState { rsTypeEnv :: TypeEnv, rsVarEnv :: Env, rsMem :: Memory }
-
-makeInitialState :: IO RState
-makeInitialState = do
-  builtins <- loadBuiltinDecls
-  let tenv = case evalInfer $ extendEnvironment emptyTypeEnv builtins of
-               Right env -> env
-               Left e -> error $ "Fatal error, cannot typecheck builtins: " ++ show e
-  res <- execInterpreter emptyEnv emptyMemory builtinsEnv
-  case res of
-    Right (env, mem) ->
-      return $ RState tenv env mem
-    Left e -> error $ "Fatal error, cannot initialie builtins: " ++ e
 
 type Repl = HaskelineT (StateT RState IO)
 
@@ -95,10 +82,15 @@ cmd input = do
 
 completer = Prefix (wordCompleter complete) [(":load", fileCompleter)]
 
+varsFromEnv :: TypeEnv -> [String]
+varsFromEnv (MM.ModuleMap modules local) = (Map.toList modules >>= toQualifiedList) ++ (Map.keys local) ++ (Map.elems modules >>= Map.keys) where
+  toQualifiedList :: (Ident, Map.Map Ident a) -> [String]
+  toQualifiedList (mod, m) = let pref = mod ++ "." in map (pref ++) (Map.keys m)
+
 complete :: (Monad m, MonadState RState m) => WordCompleter m
 complete n = let cmds = map ((':':) . fst) options in do
   tenv <- gets rsTypeEnv
-  let names = Map.keys tenv
+  let names = varsFromEnv tenv
   return $ filter (isPrefixOf n) (names ++ cmds)
 
 help :: [String] -> Repl ()
@@ -121,7 +113,7 @@ loadFile args = do
   parsed <- liftIO $ parseFile (unwords args)
   case parsed of
     ParErr.Bad e -> liftIO $ putStrLn $ "Syntax error: " ++ e
-    ParErr.Ok decls -> do
+    ParErr.Ok (imports, decls) -> do -- TODO
       mapM_ runDecl decls
 
 options :: [(String, [String] -> Repl ())]
