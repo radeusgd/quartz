@@ -3,6 +3,10 @@ module Main where
 import System.IO
 import System.Environment
 import System.Exit ( exitFailure, exitSuccess )
+import Control.Monad
+import Control.Monad.State
+import Control.Monad.Except
+import Control.Exception
 
 import Quartz.Syntax.LexQuartz
 import Quartz.Syntax.ParQuartz
@@ -16,9 +20,7 @@ import Passes.Desugar
 import Passes.EmbedTypes
 import AST.Desugared
 import Interpreter
-
-import Control.Monad
-import Control.Exception
+import Runtime
 
 import Builtins
 import Passes.TypeCheck
@@ -92,40 +94,23 @@ runExtract fname = do
 runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
 runMain decls = error "TODO " -- runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO
 
-runRun :: String -> IO ()
-runRun fname = error "TODO" --do
-  -- parsed <- parseFile' fname
-  -- (imports, decls) <- handleSyntaxError parsed
-  -- let desugared = map desugarDeclaration decls
-  -- typed <- typeCheck desugared
-  -- res <- runMain typed
-  -- case res of
-  --   Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-  --   Right res -> putStrLn res
-  -- exitSuccess
+handleError :: Show e => MonadIO m => Either e a -> m a
+handleError (Left e) = (liftIO $ putStrLn $ "Error: " ++ show e) >> (liftIO $ exitFailure)
+handleError (Right e) = return e
 
-runDebug :: String -> IO ()
-runDebug fname = error "TODO" -- do
-  -- parsed <- parseFile' fname
-  -- (imports, decls) <- handleSyntaxError parsed
-  -- putStrLn "[Linearized AST]"
-  -- mapM_ (putStrLn . printTree) decls
-  -- let desugared = map desugarDeclaration decls
-  -- putStrLn "\n[Desugared]"
-  -- mapM_ prettyLine desugared
-  -- putStrLn "Typechecking"
-  -- builtinTypes <- loadBuiltinDecls
-  -- let tcres = evalInfer $ withTopLevelDecls builtinTypes $ (typeCheckTopLevel desugared) -- TODO typecheck should also look for existence of main
-  -- case tcres of
-  --   Left err -> putStrLn ("Typechecker error: " ++ show err) >> exitFailure
-  --   Right () -> putStrLn "Types ok."
-  -- res <- runMain desugared
-  -- case res of
-  --   Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-  --   Right res -> putStrLn res
-  -- exitSuccess
-  -- where
-  --   prettyLine x = (PrettyText.putDoc $ Pretty.pretty x) >> putStrLn ""
+runImportAndMain :: FilePath -> StateT RState IO ()
+runImportAndMain path = do
+  introduceModule path >>= handleError
+  _ <- showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
+  return ()
+  -- TODO doesn't seem to evaluate
+
+runRun :: String -> IO ()
+runRun fname = do
+  init <- runExceptT makeInitialState
+  case init of
+    Left (RuntimeError err) -> (putStrLn $ "Error initializing the runtime: " ++ err) >> exitFailure
+    Right initState -> evalStateT (runImportAndMain fname) initState >> exitSuccess
 
 main :: IO ()
 main = do
@@ -135,5 +120,4 @@ main = do
     ["check", fname] -> runCheck fname
     ["extract", fname] -> runExtract fname
     ["run", fname] -> runRun fname
-    ["debug", fname] -> runDebug fname
     _ -> putStrLn "TODO usage"

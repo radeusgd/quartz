@@ -65,10 +65,14 @@ runExp e = do
 
 runImport :: String -> Repl ()
 runImport mod = do
-  e <- introduceModule mod
-  case e of
-    Left (RuntimeError err) -> liftIO $ putStrLn $ err
-    Right () -> liftIO $ putStrLn $ "Imported " ++ mod
+  path <- liftIO $ findModule mod
+  case path of
+    Left err -> liftIO $ putStrLn $ err
+    Right path -> do
+      e <- introduceModule path
+      case e of
+        Left (RuntimeError err) -> liftIO $ putStrLn $ err
+        Right () -> liftIO $ putStrLn $ "Imported " ++ mod
 
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()

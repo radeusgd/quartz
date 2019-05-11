@@ -32,6 +32,8 @@ findModule mod = do
 data RState = RState { rsTypeEnv :: TypeEnv, rsVarEnv :: Env, rsMem :: Memory }
 
 data RuntimeError = RuntimeError String
+instance Show RuntimeError where
+  show (RuntimeError s) = "RuntimeError: " ++ s
 
 makeInitialState :: ExceptT RuntimeError IO RState
 makeInitialState = do
@@ -56,17 +58,13 @@ execInterpreterInRuntime i = do
         return $ Right e
 
 introduceModule :: MonadState RState m => MonadIO m => String -> m (Either RuntimeError ())
-introduceModule mod = do
-  mpath <- liftIO $ findModule mod
-  case mpath of
-    Left e -> return $ Left $ RuntimeError e
-    Right path -> do
-      parsed <- liftIO $ parseFile path
-      case parsed of
-        Bad err -> return $ Left $ RuntimeError $ "Syntax error: " ++ err
-        Ok (imports, decls) -> do
-          -- TODO imports
-          Right <$> mapM_ introduceDeclaration decls
+introduceModule path = do
+    parsed <- liftIO $ parseFile path
+    case parsed of
+      Bad err -> return $ Left $ RuntimeError $ "Syntax error: " ++ err
+      Ok (imports, decls) -> do
+        -- TODO imports
+        Right <$> mapM_ introduceDeclaration decls
 
 introduceDeclaration :: MonadState RState m => MonadIO m => Declaration -> m (Either RuntimeError Ident)
 introduceDeclaration decl = do
