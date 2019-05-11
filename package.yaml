@@ -29,6 +29,7 @@ dependencies:
 - repline
 - MissingH
 - filepath
+- directory
 
 library:
   source-dirs: src

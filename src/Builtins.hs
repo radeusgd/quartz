@@ -47,13 +47,6 @@ withBuiltins m = do
   env <- builtinsEnv
   inOtherEnv env m
 
--- import qualified Data.Map as M
--- import AST.Typed
--- import Passes.TypeCheck(Env)
--- import Interpreter(Value(..), emptyEnv, readVar)
--- import qualified Interpreter as I
--- import Control.Monad.Reader
-
 make1ArgFunLazy :: (LazyValue -> Interpreter LazyValue) -> Value
 make1ArgFunLazy f = VFunction "x" emptyEnv $ do
   x <- readVarLazy $ IDefault "x"

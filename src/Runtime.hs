@@ -8,12 +8,26 @@ import Builtins
 import Interpreter
 
 import System.Console.Repline
+import System.Directory
 import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import Data.List
 import qualified ModuleMap as MM
 import qualified Data.Map as Map
+import Quartz.Syntax.ErrM
+import AppCommon
+
+moduleSearchDirectories :: IO [FilePath]
+moduleSearchDirectories = return [".", "./stdlib/"] -- TODO add env, detect stdlib better
+
+findModule :: String -> IO (Either String String)
+findModule mod = do
+  dirs <- moduleSearchDirectories
+  maybeToRight ("Cannot find module " ++ mod) <$> findFile dirs (mod ++ ".quartz")
+  where
+    maybeToRight l Nothing = Left l
+    maybeToRight _ (Just x) = Right x
 
 data RState = RState { rsTypeEnv :: TypeEnv, rsVarEnv :: Env, rsMem :: Memory }
 
@@ -40,6 +54,20 @@ execInterpreterInRuntime i = do
     Right (e, mem') -> do
         modify (\_ -> RState tenv env mem')
         return $ Right e
+
+introduceModule :: MonadState RState m => MonadIO m => String -> m (Either RuntimeError ())
+introduceModule mod = do
+  mpath <- liftIO $ findModule mod
+  case mpath of
+    Left e -> return $ Left $ RuntimeError e
+    Right path -> do
+      parsed <- liftIO $ parseFile path
+      case parsed of
+        Bad err -> return $ Left $ RuntimeError $ "Syntax error: " ++ err
+        Ok (imports, decls) -> do
+          -- TODO imports
+          Right <$> mapM_ introduceDeclaration decls
+      
 
 introduceDeclaration :: MonadState RState m => MonadIO m => Declaration -> m (Either RuntimeError Ident)
 introduceDeclaration decl = do

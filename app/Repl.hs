@@ -3,6 +3,7 @@ module Repl where
 
 import Quartz.Syntax.LexQuartz as Lex
 import Quartz.Syntax.ParQuartz as Par
+import qualified Quartz.Syntax.AbsQuartz as Abs
 import Quartz.Syntax.ErrM as ParErr
 import Passes.Desugar
 import Passes.TypeCheck
@@ -36,11 +37,11 @@ parseExp str = desugarExpression <$> parse Par.pExp str
 
 data ParsedLine = PExp Exp | PDecl Declaration | PImport Ident | PError String
 
-parseLine :: String -> ParsedLine -- TODO IMPORT
-parseLine str = case (parse Par.pDeclaration str, parse Par.pExp str, Left "") of
-  (Right d, Left _, Left _) -> PDecl $ desugarDeclaration d
-  (Left _, Right e, Left _) -> PExp $ desugarExpression e
-  (Left _, Left _, Right _) -> error "TODO"
+parseLine :: String -> ParsedLine
+parseLine str = case (parseDecl str, parseExp str, parse Par.pImport str) of
+  (Right d, Left _, Left _) -> PDecl d
+  (Left _, Right e, Left _) -> PExp e
+  (Left _, Left _, Right (Abs.NormalImport (Abs.QIdent (_, i)))) -> PImport i
   (Left e, Left d, Left i) -> PError $ e ++ "\n/\n" ++ d ++ "\n/\n" ++ i
   _ -> PError $ "Ambiguous parse: cannot discern between expression, declaration and import"
 
@@ -62,6 +63,13 @@ runExp e = do
     Left (RuntimeError err) -> liftIO $ putStrLn $ err
     Right str -> liftIO $ putStrLn str
 
+runImport :: String -> Repl ()
+runImport mod = do
+  e <- introduceModule mod
+  case e of
+    Left (RuntimeError err) -> liftIO $ putStrLn $ err
+    Right () -> liftIO $ putStrLn $ "Imported " ++ mod
+
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()
 cmd input = do
@@ -69,7 +77,7 @@ cmd input = do
     PError err -> liftIO $ putStrLn $ "Parse error: " ++ err
     PDecl decl -> runDecl decl
     PExp exp -> runExp exp
-    PImport _ -> error "TODO"
+    PImport mod -> runImport mod
 
 completer = Prefix (wordCompleter complete) [(":load", fileCompleter)]
 
@@ -104,7 +112,8 @@ loadFile args = do
   parsed <- liftIO $ parseFile (unwords args)
   case parsed of
     ParErr.Bad e -> liftIO $ putStrLn $ "Syntax error: " ++ e
-    ParErr.Ok (imports, decls) -> do -- TODO
+    ParErr.Ok (imports, decls) -> do
+      mapM_ runImport imports
       mapM_ runDecl decls
 
 options :: [(String, [String] -> Repl ())]
