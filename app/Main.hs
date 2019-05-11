@@ -46,10 +46,10 @@ collectSuccessOrPrintErrors printer lst =
   if null es then return as
   else mapM_ printer es >> exitFailure
 
-typeCheck :: [Declaration] -> IO [Declaration]
-typeCheck decls = do
+typeCheck :: String -> [Declaration] -> IO [Declaration]
+typeCheck mod decls = do
   builtinTypes <- loadBuiltinDecls
-  let tcres = evalInfer $ withTopLevelDecls builtinTypes $ (typeCheckTopLevel decls)
+  let tcres = evalInfer $ withTopLevelDecls (Just mod) builtinTypes $ (typeCheckTopLevel (Just mod) decls)
   case tcres of
     Left err -> printTypeError err >> exitFailure
     Right () -> return decls
@@ -61,7 +61,7 @@ runCheck fname = do
   parsed <- parseFile' fname
   (imports, decls) <- handleSyntaxError parsed
   let desugared = map desugarDeclaration decls
-  _ <- typeCheck desugared
+  _ <- typeCheck (moduleName fname) desugared
   exitSuccess
 
 runExtract :: String -> IO ()
@@ -78,42 +78,42 @@ runExtract fname = do
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
 
 runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
-runMain decls = runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO
+runMain decls = error "TODO " -- runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO
 
 runRun :: String -> IO ()
-runRun fname = do
-  parsed <- parseFile' fname
-  (imports, decls) <- handleSyntaxError parsed
-  let desugared = map desugarDeclaration decls
-  typed <- typeCheck desugared
-  res <- runMain typed
-  case res of
-    Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-    Right res -> putStrLn res
-  exitSuccess
+runRun fname = error "TODO" --do
+  -- parsed <- parseFile' fname
+  -- (imports, decls) <- handleSyntaxError parsed
+  -- let desugared = map desugarDeclaration decls
+  -- typed <- typeCheck desugared
+  -- res <- runMain typed
+  -- case res of
+  --   Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
+  --   Right res -> putStrLn res
+  -- exitSuccess
 
 runDebug :: String -> IO ()
-runDebug fname = do
-  parsed <- parseFile' fname
-  (imports, decls) <- handleSyntaxError parsed
-  putStrLn "[Linearized AST]"
-  mapM_ (putStrLn . printTree) decls
-  let desugared = map desugarDeclaration decls
-  putStrLn "\n[Desugared]"
-  mapM_ prettyLine desugared
-  putStrLn "Typechecking"
-  builtinTypes <- loadBuiltinDecls
-  let tcres = evalInfer $ withTopLevelDecls builtinTypes $ (typeCheckTopLevel desugared) -- TODO typecheck should also look for existence of main
-  case tcres of
-    Left err -> putStrLn ("Typechecker error: " ++ show err) >> exitFailure
-    Right () -> putStrLn "Types ok."
-  res <- runMain desugared
-  case res of
-    Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
-    Right res -> putStrLn res
-  exitSuccess
-  where
-    prettyLine x = (PrettyText.putDoc $ Pretty.pretty x) >> putStrLn ""
+runDebug fname = error "TODO" -- do
+  -- parsed <- parseFile' fname
+  -- (imports, decls) <- handleSyntaxError parsed
+  -- putStrLn "[Linearized AST]"
+  -- mapM_ (putStrLn . printTree) decls
+  -- let desugared = map desugarDeclaration decls
+  -- putStrLn "\n[Desugared]"
+  -- mapM_ prettyLine desugared
+  -- putStrLn "Typechecking"
+  -- builtinTypes <- loadBuiltinDecls
+  -- let tcres = evalInfer $ withTopLevelDecls builtinTypes $ (typeCheckTopLevel desugared) -- TODO typecheck should also look for existence of main
+  -- case tcres of
+  --   Left err -> putStrLn ("Typechecker error: " ++ show err) >> exitFailure
+  --   Right () -> putStrLn "Types ok."
+  -- res <- runMain desugared
+  -- case res of
+  --   Left err -> putStrLn ("Runtime error: " ++ show err) >> exitFailure
+  --   Right res -> putStrLn res
+  -- exitSuccess
+  -- where
+  --   prettyLine x = (PrettyText.putDoc $ Pretty.pretty x) >> putStrLn ""
 
 main :: IO ()
 main = do

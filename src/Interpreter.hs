@@ -2,6 +2,7 @@ module Interpreter where
 
 import Data.Map as M
 import Data.List as List
+import qualified ModuleMap as MM
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
@@ -61,7 +62,7 @@ instance IShow LazyValue where
 type ErrorType = String
 
 type Loc = Int
-data Env = Env { vars :: Map String Loc, fuelLimit :: Maybe Int }
+data Env = Env { vars :: MM.ModuleMap Loc, fuelLimit :: Maybe Int }
 data Thunk = ThunkLazy LazyValue | ThunkComputed Value
 instance Show Thunk where
   show (ThunkLazy _) = "[unevaluated thunk]"
@@ -120,7 +121,7 @@ handleOutOfFuel m = (Just <$> m) `catchError` handleError where
 --     bind e m = fmap (\loc -> M.lookup loc m) (vars e)
 
 emptyEnv :: Env
-emptyEnv = Env M.empty Nothing
+emptyEnv = Env MM.empty Nothing
 
 emptyMemory :: Memory
 emptyMemory = Memory M.empty 0 0
@@ -139,14 +140,14 @@ getJustOrError :: MonadError e m => e -> Maybe a -> m a
 getJustOrError _ (Just v) = return v
 getJustOrError err Nothing = throwError err
 
+raiseEitherToError :: MonadError e m => Either e a -> m a
+raiseEitherToError (Left e) = throwError e
+raiseEitherToError (Right a) = return a
+
 readThunk :: QualifiedIdent -> Interpreter (Loc, Thunk)
 readThunk v = do
   env <- asks vars
-  let locM = case v of
-        -- TODO new lookup rules, new env for modules and qualified names!
-        IDefault ident -> M.lookup ident env
-        IQualified mod ident -> error "TODO"
-  loc <- getJustOrError ("Variable " ++ show v ++ " not in scope (why typecheck didn't catch this?)") locM
+  loc <- raiseEitherToError $ MM.lookup v env
   mem <- gets locs
   let valM = M.lookup loc mem
   thunk <- getJustOrError ("Memory location for variable " ++ show v ++ " seems to be not allocated, this shouldn't happen.") valM
@@ -175,8 +176,8 @@ alloc' = do
   return m
 
 
-bind :: String -> Loc -> Env -> Env
-bind name loc env = env { vars = M.insert name loc (vars env) }
+bind :: QualifiedIdent -> Loc -> Env -> Env
+bind name loc env = env { vars = MM.insert name loc (vars env) }
 
 setValue :: Loc -> LazyValue -> Interpreter ()
 setValue loc val = lift $ setValue' loc val
@@ -205,7 +206,7 @@ buildNArgFunction n builder = makeLazy $ return $ VFunction "x" emptyEnv $ do
 processDefinition :: Env -> Declaration -> Interpreter Env
 processDefinition env (Function name args _ exp) = do
   loc <- alloc
-  let env' = bind name loc env
+  let env' = bind (IDefault name) loc env
   val <- inOtherEnv env' $ buildFunction args exp
   setValue loc val
   return env' where
@@ -222,7 +223,7 @@ processDefinition env (Function name args _ exp) = do
 processDefinition env (DataType name typeargs cases) = do -- TODO are typeargs here needed for anything? likely not
   locs <- mapM (\_ -> alloc) cases
   let casesWithLocs = zip cases locs
-  let env' = List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind name loc env) env casesWithLocs
+  let env' = List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind (IDefault name) loc env) env casesWithLocs
   inOtherEnv env' $ mapM_ defineCase casesWithLocs
   return env'
   where
@@ -277,7 +278,7 @@ withVal :: Ident -> LazyValue -> Interpreter a -> Interpreter a
 withVal name val m = do
   loc <- alloc
   setValue loc val
-  local (bind name loc) m
+  local (bind (IDefault name) loc) m
 
 withValsEager :: [(Ident, Value)] -> Interpreter a -> Interpreter a
 withValsEager lst m = List.foldr (uncurry withValEager) m lst
@@ -286,7 +287,7 @@ withValEager :: Ident -> Value -> Interpreter a -> Interpreter a
 withValEager name val m = do
   loc <- alloc
   setValueEager loc val
-  local (bind name loc) m
+  local (bind (IDefault name) loc) m
 
 runInterpreter :: Interpreter a -> IO (Either ErrorType a)
 runInterpreter i = do

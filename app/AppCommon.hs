@@ -6,6 +6,10 @@ import qualified Quartz.Syntax.AbsQuartz as Abs
 import Quartz.Syntax.ParQuartz
 import Passes.Desugar
 import AST.Desugared
+import System.FilePath.Posix(takeBaseName)
+
+moduleName :: String -> String
+moduleName = takeBaseName
 
 parseFile' :: String -> IO (Err ([Abs.Import], [Abs.Declaration]))
 parseFile' fname = do

@@ -28,6 +28,7 @@ dependencies:
 - union-find
 - repline
 - MissingH
+- filepath
 
 library:
   source-dirs: src

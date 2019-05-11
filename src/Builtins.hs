@@ -30,17 +30,17 @@ loadBuiltinDecls = do
     Err.Bad s -> error $ "Fatal error: syntax error in Builtins.quartz: " ++ s
     Err.Ok decls -> return $ map desugarDeclaration decls
 
-register :: Env -> (String, Value) -> Interpreter Env
-register env (name, v) = do
+register :: String -> Env -> (String, Value) -> Interpreter Env
+register mod env (name, v) = do
   loc <- alloc
   setValueEager loc v
-  return $ bind name loc env
+  return $ bind (IQualified mod name) loc env
 
 -- TODO make sure all builtins have respective declarations and vice versa
 builtinsEnv :: Interpreter Env
 builtinsEnv = do
   env <- ask
-  foldM register env builtins
+  foldM (register builtinsModuleName) env builtins
 
 withBuiltins :: Interpreter a -> Interpreter a
 withBuiltins m = do

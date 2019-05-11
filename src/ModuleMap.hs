@@ -1,9 +1,9 @@
 module ModuleMap where
 
-import Data.Map.Strict as M
+import qualified Data.Map.Strict as M
 import AST.Desugared
 
-data ModuleMap a = ModuleMap { modules :: Map Ident (Map Ident a), local :: Map Ident a }
+data ModuleMap a = ModuleMap { modules :: M.Map Ident (M.Map Ident a), local :: M.Map Ident a }
 
 empty :: ModuleMap a
 empty = ModuleMap M.empty M.empty
@@ -16,7 +16,15 @@ lookup (IQualified mod ident) m = case M.lookup mod (modules m) of
     Just e -> Right e
 lookup (IDefault ident) m = case M.lookup ident (local m) of
   Just e -> Right e
-  Nothing -> Left "TODO: default module names not yet supported" -- TODO
+  Nothing -> case findCandidateModules m of
+    [] -> Left $ "Identifier " ++ ident ++ " not found"
+    [e] -> Right $ snd e
+    more -> Left $ "Ambigouous reference, identifier " ++ ident ++ " may refer to one in the following modules: " ++ show (map fst more)
+    where
+      findCandidateModules m = M.toList (modules m) >>= tryGettingIdent
+      tryGettingIdent (modName, mapping) = case M.lookup ident mapping of
+        Just e -> [(modName, e)]
+        Nothing -> []
 
 insertLocal :: Ident -> a -> ModuleMap a -> ModuleMap a
 insertLocal ident e m = m { local = M.insert ident e (local m) }
@@ -24,3 +32,7 @@ insertLocal ident e m = m { local = M.insert ident e (local m) }
 insertQualified :: Ident -> Ident -> a -> ModuleMap a -> ModuleMap a
 insertQualified mod ident e m = m { modules = modules' } where
   modules' = M.insertWith M.union mod (M.singleton ident e) (modules m)
+
+insert :: QualifiedIdent -> a -> ModuleMap a -> ModuleMap a
+insert (IDefault i) e m = insertLocal i e m
+insert (IQualified mod i) e m = insertQualified mod i e m

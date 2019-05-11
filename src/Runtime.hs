@@ -22,14 +22,14 @@ data RuntimeError = RuntimeError String
 makeInitialState :: ExceptT RuntimeError IO RState
 makeInitialState = do
   builtins <- liftIO $ loadBuiltinDecls
-  tenv <- case evalInfer $ extendEnvironment emptyTypeEnv builtins of
+  tenv <- case evalInfer $ extendEnvironment (Just builtinsModuleName) emptyTypeEnv builtins of
                Right env -> return env
                Left e -> throwError $ RuntimeError $ "Fatal error, cannot typecheck builtins: " ++ show e
   res <- liftIO $ execInterpreter emptyEnv emptyMemory builtinsEnv
   case res of
     Right (env, mem) ->
       return $ RState tenv env mem
-    Left e -> error $ "Fatal error, cannot initialie builtins: " ++ e
+    Left e -> error $ "Fatal error, cannot initialize builtins: " ++ e
 
 execInterpreterInRuntime :: MonadState RState m => MonadIO m => Interpreter a -> m (Either RuntimeError a)
 execInterpreterInRuntime i = do
@@ -44,7 +44,7 @@ execInterpreterInRuntime i = do
 introduceDeclaration :: MonadState RState m => MonadIO m => Declaration -> m (Either RuntimeError Ident)
 introduceDeclaration decl = do
   RState tenv env mem <- get
-  case evalInfer $ extendEnvironment tenv [decl] of
+  case evalInfer $ extendEnvironment Nothing tenv [decl] of
     Left err -> return $ Left $ RuntimeError $ "Type error: " ++ show err
     Right tenv' -> do
       res <- liftIO $ execInterpreter env mem (processDefinition env decl)

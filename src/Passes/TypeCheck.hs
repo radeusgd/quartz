@@ -93,13 +93,13 @@ readVar :: QualifiedIdent -> TCM Type
 readVar = readVar' >=> instantiate
 
 -- TODO local vs qualified
-withVar :: Ident -> QualifiedType -> TCM a -> TCM a
+withVar :: QualifiedIdent -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
-  introduceType :: Ident -> QualifiedType -> Env -> Env
-  introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (MM.insertLocal i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
+  introduceType :: QualifiedIdent -> QualifiedType -> Env -> Env
+  introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (MM.insert i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
 
-withVars :: [(Ident, QualifiedType)] -> TCM a -> TCM a
-withVars lst m = foldr (uncurry withVar) m lst
+withLocalVars :: [(Ident, QualifiedType)] -> TCM a -> TCM a
+withLocalVars lst m = foldr (uncurry withVar) m (map (\(i, t) -> (IDefault i, t)) lst)
 
 emptySubst :: Subst
 emptySubst = M.empty
@@ -119,14 +119,14 @@ bindVar i t =
 noSubst :: TCM a -> TCM (a, Subst)
 noSubst = ((\x -> (x, emptySubst)) <$>)
 
-withTopLevelDecls :: [Declaration] -> TCM a -> TCM a
-withTopLevelDecls [] m = m
-withTopLevelDecls (Function name _ maytype _ : t) m = case maytype of
-  Just qt -> withTopLevelDecls t $ withVar name qt m
+withTopLevelDecls :: Maybe Ident -> [Declaration] -> TCM a -> TCM a
+withTopLevelDecls mod [] m = m
+withTopLevelDecls mod (Function name _ maytype _ : t) m = case maytype of
+  Just qt -> withTopLevelDecls mod t $ withVar (qualifyIdent mod name) qt m
   Nothing -> throwErrorWithContext $ TopLevelTypeNotSpecified name
-withTopLevelDecls (d@(DataType _ _ _) : t) m =
+withTopLevelDecls mod (d@(DataType _ _ _) : t) m =
   -- TODO once we have kind checking we need to tell ourselves about our existence so recursive types work
-  withTopLevelDecls t $ withDeclaration d m
+  withTopLevelDecls mod t $ withDeclaration mod d m
 
 atomsForFreeVars :: [Ident]
 atomsForFreeVars = map (\i -> '\'' : show i) ([1..] :: [Integer])
@@ -254,7 +254,7 @@ inferE' (EVar v) = noSubst $ readVar v
 inferE' (EConst c) = noSubst $ literalType c
 inferE' (ELambda x e) = do
   xt <- freshFreeType
-  (et, s) <- withVar x (ForAll [] xt) $ inferE' e
+  (et, s) <- withVar (IDefault x) (ForAll [] xt) $ inferE' e
   return $ (Abstraction (substitute s xt) (substitute s et), s)
 inferE' (ECaseOf e cases) = do
   (inpT, outT, sc) <- inferCases cases
@@ -288,7 +288,7 @@ getCaseArgTypes (ECase name args _) = do
 inferCaseResult :: ECase -> TCM (Type, Subst)
 inferCaseResult c@(ECase _ _ e) = do
   typedargs <- getCaseArgTypes c
-  withVars typedargs $ inferE' e
+  withLocalVars typedargs $ inferE' e
 
 -- infers the input type of case set and its output type
 inferCases :: [ECase] -> TCM (Type, Type, Subst)
@@ -303,8 +303,8 @@ inferCases cases = do
   let outputType = head outputTypes
   return (substitute s' inputType, substitute s' outputType, s')
 
-withDeclaration :: Declaration -> TCM a -> TCM a
-withDeclaration d m = fst <$> withDeclaration' d m
+withDeclaration :: Maybe Ident -> Declaration -> TCM a -> TCM a
+withDeclaration mod d m = fst <$> withDeclaration' mod d m
 
 -- TODO this freeAtoms over Expressions and Declarations should be refactored into some kind of fmap
 freeAtomsQT :: M.Map Ident Type -> QualifiedType -> QualifiedType
@@ -330,13 +330,17 @@ freeTheAtoms atoms exp = do
   subst <- mapM (\i -> do t <- freshFreeType; return (i, t)) atoms
   return $ freeAtomsE (M.fromList subst) exp
 
-withDeclaration' :: Declaration -> TCM a -> TCM (a, Subst)
-withDeclaration' (Function name args usertype body) m = do
+qualifyIdent :: Maybe Ident -> Ident -> QualifiedIdent
+qualifyIdent Nothing i = IDefault i
+qualifyIdent (Just m) i = IQualified m i
+
+withDeclaration' :: Maybe Ident -> Declaration -> TCM a -> TCM (a, Subst)
+withDeclaration' mod (Function name args usertype body) m = do
   (ttype, subst) <- case usertype of -- this implementation would allow for recursion only if the signature is provided
     Nothing -> inferred body
     Just t@(ForAll vars _) -> do
       body' <- freeTheAtoms vars body
-      withVar name t $ inferred body'
+      withVar (qualifyIdent mod name) t $ inferred body'
   -- body' <- case usertype of -- this could allow for recursion without explicit type signature
   --   Nothing -> return body
   --   Just (ForAll vars _) -> freeTheAtoms vars body
@@ -346,7 +350,7 @@ withDeclaration' (Function name args usertype body) m = do
   -- let qtype = closeType ttype
   qtype <- generalize ttype
   -- traceShowM ("withdecl", name, ttype, qtype)
-  res <- withVar name qtype $ m
+  res <- withVar (qualifyIdent mod name) qtype $ m
   return (res, subst)
   where inferred body =
           inContext name $ do
@@ -360,12 +364,12 @@ withDeclaration' (Function name args usertype body) m = do
               let ts = substitute s' ttype
               return (ts, s <#> s')
 
-withDeclaration' (DataType dataTypeName typeArgs cases) m = do
+withDeclaration' mod (DataType dataTypeName typeArgs cases) m = do
   r <- foldr withConstructor m cases
   return (r, emptySubst) -- no substitutions here as types are already generic, TODO: right?
   where
     withConstructor (DataTypeCase name argtypes) =
-      withVar name $ ForAll typeArgs (buildConstructor argtypes $ dataTypeInstanceType (map IDefault typeArgs)) -- TODO polymorphic datatypes
+      withVar (qualifyIdent mod name) $ ForAll typeArgs (buildConstructor argtypes $ dataTypeInstanceType (map IDefault typeArgs)) -- TODO polymorphic datatypes
     buildConstructor [] resultType = resultType
     buildConstructor (h:t) resultType = Abstraction h (buildConstructor t resultType)
     dataTypeInstanceType args = List.foldl' (\t -> \a -> Construction t (Atom a)) (Atom $ IDefault dataTypeName) args -- TODO probably want to add module here
@@ -373,7 +377,7 @@ withDeclaration' (DataType dataTypeName typeArgs cases) m = do
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e
 inferBlock (d : tail) e = do
-  ((bl, s1), s2) <- withDeclaration' d $ inferBlock tail e
+  ((bl, s1), s2) <- withDeclaration' Nothing d $ inferBlock tail e
   return (substitute s2 bl, s1 <#> s2)
 
 literalType :: Literal -> TCM Type
@@ -401,12 +405,12 @@ inferTypes m = do
 inferType :: TCM Type -> Either (WithContext TypeError) QualifiedType
 inferType m = head <$> inferTypes ((:[]) <$> m)
 
-typeCheckTopLevel :: [Declaration] -> TCM ()
-typeCheckTopLevel decls =
-  withTopLevelDecls decls (inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
+typeCheckTopLevel :: Maybe Ident -> [Declaration] -> TCM ()
+typeCheckTopLevel mod decls =
+  withTopLevelDecls mod decls (inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
 
-extendEnvironment :: TypeEnv -> [Declaration] -> TCM TypeEnv
-extendEnvironment e decls = withEnvironment e $ withTopLevelDecls decls $ typeCheckTopLevel decls >> asks eBindings
+extendEnvironment :: Maybe Ident -> TypeEnv -> [Declaration] -> TCM TypeEnv
+extendEnvironment mod e decls = withEnvironment e $ withTopLevelDecls mod decls $ typeCheckTopLevel mod decls >> asks eBindings
 
 withEnvironment :: TypeEnv -> TCM a -> TCM a
 withEnvironment te = local (\_ -> Env te "???" Set.empty Set.empty)
