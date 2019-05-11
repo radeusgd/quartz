@@ -60,6 +60,7 @@ runCheck :: String -> IO ()
 runCheck fname = do
   parsed <- parseFile' fname
   (imports, decls) <- handleSyntaxError parsed
+  -- TODO imports
   let desugared = map desugarDeclaration decls
   _ <- typeCheck (moduleName fname) desugared
   exitSuccess
@@ -67,15 +68,26 @@ runCheck fname = do
 runExtract :: String -> IO ()
 runExtract fname = do
   (imports, decls) <- parseFile fname >>= handleSyntaxError
+  mapM_ printImport imports
   mapM_ printSignature decls
   exitSuccess
   where
+    printImport :: String -> IO ()
+    printImport i = putStrLn $ "import " ++ i
     printSignature :: Declaration -> IO ()
     printSignature (Function name args ttype _) = putStrLn sig where
       sig = name ++ "(" ++ printArgs args ++ ")" ++ ": " ++ maybe "???" show ttype
       printArgs [] = ""
       printArgs [arg] = arg
       printArgs (arg : t) = arg ++ ", " ++ printArgs t
+    printSignature (DataType name typeargs cases) = mapM_ (printCase (buildConstructor name $ reverse typeargs)) cases
+    buildConstructor :: Ident -> [Ident] -> Type
+    buildConstructor name [] = Atom $ IQualified (moduleName fname) name
+    buildConstructor name (h:t) = Construction (buildConstructor name t) (Atom $ IDefault h)
+    buildFunction :: Type -> [Type] -> Type
+    buildFunction ret [] = ret
+    buildFunction ret (h:t) = Abstraction h (buildFunction ret t)
+    printCase rettype (DataTypeCase name fields) = putStrLn $ name ++ ": " ++ show (buildFunction rettype fields)
 
 runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
 runMain decls = error "TODO " -- runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO

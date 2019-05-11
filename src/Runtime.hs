@@ -67,7 +67,6 @@ introduceModule mod = do
         Ok (imports, decls) -> do
           -- TODO imports
           Right <$> mapM_ introduceDeclaration decls
-      
 
 introduceDeclaration :: MonadState RState m => MonadIO m => Declaration -> m (Either RuntimeError Ident)
 introduceDeclaration decl = do

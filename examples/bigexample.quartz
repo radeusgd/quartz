@@ -1,5 +1,5 @@
 // many interesting examples in Prelude: polymorphic id, const, polymorphic recursive datatypes (List a)
-//import Prelude;
+import Prelude;
 
 // lambdas with type reconstruction
 def echo(): IO () = readLine >>= (\line -> (print line));

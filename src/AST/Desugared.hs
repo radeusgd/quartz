@@ -29,7 +29,6 @@ data QualifiedType = ForAll [Ident] Type
 
 data Declaration
   = Function Ident [Ident] (Maybe QualifiedType) Exp
---  | Import String
   | DataType Ident [Ident] [DataTypeCase]
   deriving Show
 -- type of functions is the type of the whole function in contrast to just return type that was the case in Abstract Syntax
