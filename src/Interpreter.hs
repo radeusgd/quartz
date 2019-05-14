@@ -7,7 +7,6 @@ import qualified ModuleMap as MM
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
-import Debug.Trace
 
 import qualified AST.Desugared as Desugared
 import AST.Desugared
@@ -260,9 +259,8 @@ setDefinitionValue locations (DataType _ _ cases) = do -- TODO are typeargs here
 interpret :: Exp -> Interpreter LazyValue
 interpret (EConst  c) = makeLazy $ fromLiteral c
 interpret (EBlock decls e) = do
-  env <- ask
-  innerEnv <- foldM (processDefinition Nothing) env decls
-  inOtherEnv innerEnv $ interpret e
+  let introDef m decl = do env <- ask; env' <- processDefinition Nothing env decl; inOtherEnv env' m
+  List.foldr (flip introDef) (interpret e) decls
 interpret (EVar v) = makeLazy $ readVar v
 interpret (ELambda argname exp) = do
   env <- ask
@@ -289,7 +287,7 @@ interpret (EApplication fun arg) = makeLazy $ do
   useFuel 1
   case fun' of
     (VFunction argname funEnv computation) -> inOtherEnv funEnv $
-      withVal argname arg' computation >>= force -- TODO not sure if want to leave it like this
+      withVal argname arg' computation >>= force
     _ -> throwError $ "Trying to apply to a non-function (" ++ show fun ++ ") (why didn't typechecker catch this?)"
 
 withVals :: [(Ident, LazyValue)] -> Interpreter a -> Interpreter a

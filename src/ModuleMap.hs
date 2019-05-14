@@ -8,7 +8,7 @@ data ModuleMap a = ModuleMap { modules :: M.Map Ident (M.Map Ident a), local :: 
 empty :: ModuleMap a
 empty = ModuleMap M.empty M.empty
 
-lookup :: Show a => QualifiedIdent -> ModuleMap a -> Either String a -- FIXME remove show
+lookup :: QualifiedIdent -> ModuleMap a -> Either String a
 lookup (IQualified mod ident) m = case M.lookup mod (modules m) of
   Nothing -> Left $ "Module " ++ mod ++ " not found in current scope"
   Just module' -> case M.lookup ident module' of
@@ -17,7 +17,7 @@ lookup (IQualified mod ident) m = case M.lookup mod (modules m) of
 lookup (IDefault ident) m = case M.lookup ident (local m) of
   Just e -> Right e
   Nothing -> case findCandidateModules of
-    [] -> Left $ "Identifier " ++ ident ++ " not found, " ++ show m
+    [] -> Left $ "Identifier " ++ ident ++ " not found"
     [e] -> Right $ snd e
     more -> Left $ "Ambigouous reference, identifier " ++ ident ++ " may refer to one in the following modules: " ++ show (map fst more)
     where

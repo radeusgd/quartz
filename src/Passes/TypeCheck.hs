@@ -347,7 +347,7 @@ withDeclaration' mod (Function name args usertype body) m = do
   -- subst'' <- 
   let qtype = closeType ttype -- TODO
   -- qtype <- generalize ttype -- TODO investigate this
-  traceShowM ("withdecl", name, ttype, qtype)
+  -- traceShowM ("withdecl", name, ttype, qtype)
   res <- withVar qualified qtype $ m
   return (res, subst)
   where inferred body =
@@ -405,7 +405,7 @@ inferType m = head <$> inferTypes ((:[]) <$> m)
 
 typeCheckTopLevel :: Maybe Ident -> [Declaration] -> TCM ()
 typeCheckTopLevel mod decls =
-  withTopLevelDecls mod decls (asks eBindings >>= traceShowM . MM.modules >> inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
+  withTopLevelDecls mod decls (inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
 
 extendEnvironment :: Maybe Ident -> TypeEnv -> [Declaration] -> TCM TypeEnv
 extendEnvironment mod e decls = do

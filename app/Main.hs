@@ -1,33 +1,20 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Main where
 
-import System.IO
+import Prelude hiding(mod)
 import System.Environment
 import System.Exit ( exitFailure, exitSuccess )
-import Control.Monad
 import Control.Monad.State
 import Control.Monad.Except
-import Control.Exception
-
-import Quartz.Syntax.LexQuartz
-import Quartz.Syntax.ParQuartz
-import Quartz.Syntax.SkelQuartz
-import Quartz.Syntax.PrintQuartz
-import qualified Quartz.Syntax.AbsQuartz as Abs
 
 import Quartz.Syntax.ErrM
 
 import Passes.Desugar
-import Passes.EmbedTypes
 import AST.Desugared
-import Interpreter
 import Runtime
 
 import Builtins
 import Passes.TypeCheck
-import Linker
-import Data.Text.Prettyprint.Doc as Pretty
-import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
 import Repl
 import AppCommon
@@ -92,9 +79,6 @@ runExtract fname = do
     buildFunction ret (h:t) = Abstraction h (buildFunction ret t)
     printCase rettype (DataTypeCase name fields) = putStrLn $ name ++ ": " ++ show (buildFunction rettype fields)
 
-runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
-runMain decls = error "TODO " -- runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO
-
 handleErrorByFailing :: MonadIO m => ExceptT RuntimeError m a -> m a
 handleErrorByFailing m = do
   r <- runExceptT m
@@ -107,13 +91,13 @@ runImportAndMain path = do
   handleErrorByFailing $ introduceModule path
   te <- gets rsTypeEnv
   liftIO $ print $ varsFromEnv te
-  res <- handleErrorByFailing $ showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
-  liftIO $ print res
+  _ <- handleErrorByFailing $ showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
+  return ()
 
 runRun :: String -> IO ()
 runRun fname = do
-  init <- runExceptT makeInitialState
-  case init of
+  i <- runExceptT makeInitialState
+  case i of
     Left (RuntimeError err) -> (putStrLn $ "Error initializing the runtime: " ++ err) >> exitFailure
     Right initState -> evalStateT (runImportAndMain fname) initState >> exitSuccess
 

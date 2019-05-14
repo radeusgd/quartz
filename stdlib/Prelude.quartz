@@ -44,7 +44,7 @@ def length[a](l: List a): Int = case l of {
     | Cons x tail -> 1 + (length tail)
 };
 
-//def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
+def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
 
 def map[a][b](f: a -> b, l: List a): List b = case l of {
     | Nil -> Nil
@@ -92,3 +92,5 @@ def fix[a](F: a -> a): a = {
     val x: a = F x;
     x
 };
+
+data Tree a = Node a * (Tree a) * (Tree a) | Leaf;

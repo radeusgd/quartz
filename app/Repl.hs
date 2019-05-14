@@ -8,7 +8,6 @@ import Quartz.Syntax.ErrM as ParErr
 import Passes.Desugar
 import Passes.TypeCheck
 import AST.Desugared
-import Builtins
 import Interpreter
 import AppCommon
 import Runtime
@@ -110,6 +109,18 @@ typeof args = do
         Left err -> liftIO $ putStrLn $ "Error: " ++ err
         Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t
 
+inspectMemory :: [String] -> Repl ()
+inspectMemory [arg] = do
+  let loc = read arg :: Loc
+  mem <- gets rsMem
+  let locations = locs mem
+  case Map.lookup loc locations of
+    Nothing -> liftIO $ putStrLn "No data under this address"
+    Just (ThunkComputed v) -> liftIO $ print v
+    Just (ThunkLazy (Lazy env _)) -> liftIO $ putStrLn $ "Lazy value, not computed, closure = " ++ show (vars env)
+  return ()
+inspectMemory _ = liftIO $ putStrLn "Wrong number of arguments"
+
 loadFile :: [String] -> FailableRepl ()
 loadFile args = do
   parsed <- liftIO $ parseFile (unwords args)
@@ -123,7 +134,8 @@ options :: [(String, [String] -> Repl ())]
 options = [
     ("t", typeof),
     ("q", quit),
-    ("load", handleError . loadFile)
+    ("load", handleError . loadFile),
+    ("inspectMemory", inspectMemory)
   ]
 
 quit :: [String] -> Repl ()

@@ -4,7 +4,7 @@ module Builtins(
   builtinsEnv,
   builtinsModuleName
                ) where
-
+import Prelude hiding (mod)
 import qualified Quartz.Syntax.AbsQuartz as Abs
 import qualified Quartz.Syntax.ParQuartz as Par
 import qualified Quartz.Syntax.ErrM as Err
@@ -114,9 +114,9 @@ builtins = [
   ("+", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x + y)),
   ("*", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x * y)),
   ("-", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x - y)),
-  ("/", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x `div` y)),
+  ("/", (make2ArgFunLazy $ \x' -> \y' -> do (VInt x) <- force x'; (VInt y) <- force y'; if y == 0 then throwError "Division by zero" else makeLazy $ return $ VInt $ x `div` y)),
   ("<+>", (make2ArgFun $ \(VStr a) -> \(VStr b) -> VStr $ a ++ b)),
-  ("==", make2ArgFun $ \x -> \y -> makeBool $ x == y),
+  ("==", make2ArgFunLazy $ \x -> \y -> makeLazy $ do x' <- force x; y' <- force y; makeBool <$> (x' `compareValues` y')),
   ("<=", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x <= y),
   (">=", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x >= y),
   ("<", make2ArgFun $ \(VInt x) -> \(VInt y) -> makeBool $ x < y),
@@ -167,11 +167,13 @@ builtins = [
 -- def readLine() : IO String = ???;
 -- defop >>= [a][b](m: IO a, f: (a -> IO b)): IO b = ???;
 
-instance Eq Value where
-  (VStr a) == (VStr b) = a == b
-  (VInt a) == (VInt b) = a == b
-  (VDouble a) == (VDouble b) = a == b
-  (VFunction _ _ _) == _ = error "Cannot compare functions" -- TODO promote this to interpreter error instead of crash
-  VUnit == VUnit = True
-  (VDataType constr1 args1) == (VDataType constr2 args2) = constr1 == constr2 && args1 == args2
-  _ == _ = False
+compareValues :: Value -> Value -> Interpreter Bool
+(VStr a) `compareValues` (VStr b) = return $ a == b
+(VInt a) `compareValues` (VInt b) = return $ a == b
+(VDouble a) `compareValues` (VDouble b) = return $ a == b
+(VFunction _ _ _) `compareValues` _ = throwError "Cannot compare functions" -- TODO promote this to interpreter error instead of crash
+VUnit `compareValues` VUnit = return True
+(VDataType constr1 args1) `compareValues` (VDataType constr2 args2) = do
+  argEqs <- mapM (uncurry compareValues) (zip args1 args2)
+  return $ constr1 == constr2 && length args1 == length args2 && all id argEqs
+_ `compareValues` _ = return False

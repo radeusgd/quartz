@@ -63,7 +63,7 @@ makeInitialState = do
 
 execInterpreterInRuntime :: MonadError RuntimeError m => MonadState RState m => MonadIO m => Interpreter a -> m a
 execInterpreterInRuntime i = do
-  RState tenv env mem _ _ <- get
+  RState _ env mem _ _ <- get
   res <- liftIO $ execInterpreter env mem i
   case res of
     Left err -> throwError $ RuntimeError $ "Runtime error: " ++ err
@@ -75,13 +75,11 @@ importModule :: (MonadError RuntimeError m, MonadState RState m, MonadIO m) => S
 importModule path (tenv, env) = do
   tenv0 <- gets rsInitialTypeEnv
   env0 <- gets rsInitialEnv
-  mem <- gets rsMem
   let mod = Just $ moduleName path
   (imports, decls) <- readModule path
   paths <- mapM findModule imports
-  traceShowM $ tenv0
-  traceShowM $ vars env0
   (tenv1, env1) <- foldM (flip importModule) (tenv0, env0) paths
+  mem <- gets rsMem
   tenv' <- orElse
     (evalInfer $ withEnvironment tenv1 $ inContext (moduleName path) $ extendEnvironment mod tenv decls)
     (\err -> RuntimeError $ path ++ " Type error: " ++ show err)
@@ -108,7 +106,6 @@ introduceDeclaration decl = do
         Left err -> throwError $ RuntimeError $ "Runtime error: " ++ err
         Right (env', mem') -> do
           modify (\rs -> rs { rsTypeEnv = tenv', rsVarEnv = env', rsMem = mem' })
-          traceShowM ("introduced", declarationName decl)
           return $ declarationName decl
 
 evalExp :: MonadError RuntimeError m => MonadState RState m => MonadIO m => Exp -> m Value
