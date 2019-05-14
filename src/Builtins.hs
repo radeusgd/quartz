@@ -36,7 +36,7 @@ register mod env (name, v) = do
   setValueEager loc v
   return $ bind (IQualified mod name) loc env
 
--- TODO make sure all builtins have respective declarations and vice versa
+-- TODO it would be good to make sure all builtins have respective declarations and vice versa
 builtinsEnv :: Interpreter Env
 builtinsEnv = do
   env <- ask
@@ -145,7 +145,7 @@ builtins = [
   sequenceIODiscard :: LazyValue -> LazyValue -> Interpreter LazyValue
   sequenceIODiscard a b = makeLazy $ return $ VIO $ makeLazy $ do
     (VIO ia) <- force a
-    _ <- ia >>= force -- we force here so that the computation surely runs, TODO might want to reconsider this though
+    _ <- ia >>= force
     -- the goal is to have print "a" >> print "b" work correctly, but ideally (return ???) >> print "a" should not crash (which it does now)
     (VIO ib) <- force b
     ib >>= force

@@ -1,41 +1,55 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Runtime where
+
+import Prelude hiding (mod, exp)
 
 import Passes.TypeCheck
 import AST.Desugared
 import Builtins
 import Interpreter
 
-import System.Console.Repline
 import System.Directory
 import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import Data.List
-import qualified ModuleMap as MM
-import qualified Data.Map as Map
 import Quartz.Syntax.ErrM
 import AppCommon
+
+import Debug.Trace
+
+orElse :: MonadError e1 m => (Either e2 a) -> (e2 -> e1) -> m a
+orElse (Left e) f = throwError $ f e
+orElse (Right a) _ = return a
 
 moduleSearchDirectories :: IO [FilePath]
 moduleSearchDirectories = return [".", "./stdlib/"] -- TODO add env, detect stdlib better
 
-findModule :: String -> IO (Either String String)
+findModule :: MonadError RuntimeError m => MonadIO m => String -> m String
 findModule mod = do
-  dirs <- moduleSearchDirectories
-  maybeToRight ("Cannot find module " ++ mod) <$> findFile dirs (mod ++ ".quartz")
-  where
-    maybeToRight l Nothing = Left l
-    maybeToRight _ (Just x) = Right x
+  dirs <- liftIO $ moduleSearchDirectories
+  f <- liftIO $ findFile dirs (mod ++ ".quartz")
+  case f of
+    Nothing -> throwError $ RuntimeError $ ("Cannot find module " ++ mod)
+    Just path -> return path
 
-data RState = RState { rsTypeEnv :: TypeEnv, rsVarEnv :: Env, rsMem :: Memory }
+readModule :: MonadError RuntimeError m => MonadIO m => String -> m ([Ident], [Declaration])
+readModule path = do
+  parsed <- liftIO $ parseFile path
+  case parsed of
+    Bad err -> throwError $ RuntimeError $ path ++ " Syntax error: " ++ err
+    Ok res -> return res
 
+data RState = RState { rsTypeEnv :: TypeEnv, rsVarEnv :: Env, rsMem :: Memory, rsInitialTypeEnv :: TypeEnv, rsInitialEnv :: Env }
+-- class MonadRuntime m
+-- instance (MonadError RuntimeError m, MonadState RState m, MonadIO m) => MonadRuntime m
 data RuntimeError = RuntimeError String
 instance Show RuntimeError where
-  show (RuntimeError s) = "RuntimeError: " ++ s
+  show (RuntimeError s) = "Error: " ++ s
 
-makeInitialState :: ExceptT RuntimeError IO RState
+makeInitialState :: MonadError RuntimeError m => MonadIO m => m RState
 makeInitialState = do
   builtins <- liftIO $ loadBuiltinDecls
   tenv <- case evalInfer $ extendEnvironment (Just builtinsModuleName) emptyTypeEnv builtins of
@@ -44,52 +58,68 @@ makeInitialState = do
   res <- liftIO $ execInterpreter emptyEnv emptyMemory builtinsEnv
   case res of
     Right (env, mem) ->
-      return $ RState tenv env mem
-    Left e -> error $ "Fatal error, cannot initialize builtins: " ++ e
+      return $ RState tenv env mem tenv env
+    Left e -> throwError $ RuntimeError $ "Fatal error, cannot initialize builtins: " ++ e
 
-execInterpreterInRuntime :: MonadState RState m => MonadIO m => Interpreter a -> m (Either RuntimeError a)
+execInterpreterInRuntime :: MonadError RuntimeError m => MonadState RState m => MonadIO m => Interpreter a -> m a
 execInterpreterInRuntime i = do
-  RState tenv env mem <- get
+  RState tenv env mem _ _ <- get
   res <- liftIO $ execInterpreter env mem i
   case res of
-    Left err -> return $ Left $ RuntimeError $ "Runtime error: " ++ err
+    Left err -> throwError $ RuntimeError $ "Runtime error: " ++ err
     Right (e, mem') -> do
-        modify (\_ -> RState tenv env mem')
-        return $ Right e
+        modify (\rs -> rs { rsMem = mem' })
+        return e
 
-introduceModule :: MonadState RState m => MonadIO m => String -> m (Either RuntimeError ())
+importModule :: (MonadError RuntimeError m, MonadState RState m, MonadIO m) => String -> (TypeEnv, Env) -> m (TypeEnv, Env)
+importModule path (tenv, env) = do
+  tenv0 <- gets rsInitialTypeEnv
+  env0 <- gets rsInitialEnv
+  mem <- gets rsMem
+  let mod = Just $ moduleName path
+  (imports, decls) <- readModule path
+  paths <- mapM findModule imports
+  traceShowM $ tenv0
+  traceShowM $ vars env0
+  (tenv1, env1) <- foldM (flip importModule) (tenv0, env0) paths
+  tenv' <- orElse
+    (evalInfer $ withEnvironment tenv1 $ inContext (moduleName path) $ extendEnvironment mod tenv decls)
+    (\err -> RuntimeError $ path ++ " Type error: " ++ show err)
+  exec <- liftIO $ execInterpreter env1 mem (processDefinitions mod env decls)
+  (env', mem') <- orElse exec (\err -> RuntimeError $ path ++ " Initialization runtime error: " ++ show err)
+  modify $ \rs -> rs { rsMem = mem' }
+  return (tenv', env')
+
+introduceModule :: MonadError RuntimeError m => MonadState RState m => MonadIO m => String -> m ()
 introduceModule path = do
-    parsed <- liftIO $ parseFile path
-    case parsed of
-      Bad err -> return $ Left $ RuntimeError $ "Syntax error: " ++ err
-      Ok (imports, decls) -> do
-        -- TODO imports
-        Right <$> mapM_ introduceDeclaration decls
+  tenv <- gets rsTypeEnv
+  env <- gets rsVarEnv
+  (tenv', env') <- importModule path (tenv, env)
+  modify $ \rs -> rs { rsTypeEnv = tenv', rsVarEnv = env' }
 
-introduceDeclaration :: MonadState RState m => MonadIO m => Declaration -> m (Either RuntimeError Ident)
+introduceDeclaration :: MonadError RuntimeError m => MonadState RState m => MonadIO m => Declaration -> m Ident
 introduceDeclaration decl = do
-  RState tenv env mem <- get
-  case evalInfer $ extendEnvironment Nothing tenv [decl] of
-    Left err -> return $ Left $ RuntimeError $ "Type error: " ++ show err
+  RState tenv env mem _ _ <- get
+  case evalInfer $ withEnvironment tenv $ extendEnvironment Nothing tenv [decl] of
+    Left err -> throwError $ RuntimeError $ "Type error: " ++ show err
     Right tenv' -> do
-      res <- liftIO $ execInterpreter env mem (processDefinition env decl)
+      res <- liftIO $ execInterpreter env mem (processDefinition Nothing env decl)
       case res of
-        Left err -> return $ Left $ RuntimeError $ "Runtime error: " ++ err
+        Left err -> throwError $ RuntimeError $ "Runtime error: " ++ err
         Right (env', mem') -> do
-          modify (\_ -> RState tenv' env' mem')
-          return $ Right $ declarationName decl
+          modify (\rs -> rs { rsTypeEnv = tenv', rsVarEnv = env', rsMem = mem' })
+          traceShowM ("introduced", declarationName decl)
+          return $ declarationName decl
 
-evalExp :: MonadState RState m => MonadIO m => Exp -> m (Either RuntimeError Value)
+evalExp :: MonadError RuntimeError m => MonadState RState m => MonadIO m => Exp -> m Value
 evalExp exp = do
-  RState tenv env mem <- get
+  RState tenv env mem _ _ <- get
   case evalInfer $ withEnvironment tenv $ inferExpType exp of
-    Left err -> return $ Left $ RuntimeError $ "Type error: " ++ show err
+    Left err -> throwError $ RuntimeError $ "Type error: " ++ show err
     Right _ -> do
       execInterpreterInRuntime (interpret exp >>= force)
 
-showExp :: MonadState RState m => MonadIO m => Exp -> m (Either RuntimeError String)
+showExp :: MonadError RuntimeError m => MonadState RState m => MonadIO m => Exp -> m String
 showExp exp = do
   v <- evalExp exp
-  case v of
-    Left e -> return $ Left e
-    Right v -> execInterpreterInRuntime (ishow RunIO v)
+  execInterpreterInRuntime (ishow RunIO v)

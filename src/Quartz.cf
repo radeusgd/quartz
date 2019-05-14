@@ -19,7 +19,7 @@ Operator. Declaration ::= "defop" CustomOperator [TypeQualifier] "(" Arg "," Arg
 Value. Declaration ::= "val" QIdent ":" Type "=" Exp ;
 ValueInferred. Declaration ::= "val" QIdent "=" Exp ;
 -- Import. Declaration ::= "import" QIdent ;
-Data. Declaration ::= "data" QIdent [QIdent] "=" [DataCase] ; -- TODO type polymorphism
+Data. Declaration ::= "data" QIdent [QIdent] "=" [DataCase] ;
 
 DataConstructor. DataCase ::= QIdent [Type] ;
 separator Type "*" ;

@@ -27,12 +27,15 @@ data Type
 
 data QualifiedType = ForAll [Ident] Type
 
+qualifyIdent :: Maybe Ident -> Ident -> QualifiedIdent
+qualifyIdent Nothing i = IDefault i
+qualifyIdent (Just m) i = IQualified m i
+
 data Declaration
   = Function Ident [Ident] (Maybe QualifiedType) Exp
   | DataType Ident [Ident] [DataTypeCase]
   deriving Show
 -- type of functions is the type of the whole function in contrast to just return type that was the case in Abstract Syntax
--- TODO values may be 0-arg functions, but evaluation should be lazy then
 
 data DataTypeCase = DataTypeCase Ident [Type] deriving Show
 
@@ -40,7 +43,7 @@ declarationName :: Declaration -> String
 declarationName (Function name _ _ _) = name
 declarationName (DataType name _ _) = name
 
--- newtype Arg = Argument Ident -- TODO default values are discarded for now
+-- newtype Arg = Argument Ident -- TODO default values are not implemented now
 --   deriving Show
 
 data Exp

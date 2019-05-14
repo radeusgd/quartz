@@ -44,7 +44,7 @@ def length[a](l: List a): Int = case l of {
     | Cons x tail -> 1 + (length tail)
 };
 
-def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
+//def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
 
 def map[a][b](f: a -> b, l: List a): List b = case l of {
     | Nil -> Nil
@@ -56,7 +56,7 @@ def append[a](l1: List a, l2: List a): List a = case l1 of {
     | Cons h t -> Cons h (append t l2)
 };
 
-defop <++>[a](l1: List a, l2: List a): List a = append l1 l2;
+defop <++>[a](l1: List a, l2: List a): List a = Prelude.append l1 l2;
 
 def flatten[a](l: List (List a)): List a = case l of {
     | Nil -> Nil

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
 module Repl where
 
 import Quartz.Syntax.LexQuartz as Lex
@@ -23,6 +23,14 @@ import qualified ModuleMap as MM
 import qualified Data.Map as Map
 
 type Repl = HaskelineT (StateT RState IO)
+type FailableRepl = ExceptT RuntimeError Repl
+
+handleError :: FailableRepl () -> Repl ()
+handleError m = do
+  e <- runExceptT m
+  case e of
+    Left e -> liftIO $ print e
+    Right () -> return ()
 
 parse :: ([Lex.Token] -> ParErr.Err a) -> String -> Either String a
 parse par str = let toks = Par.myLexer str in case par toks of
@@ -49,34 +57,25 @@ showingError :: Show e => Either e a -> Either String a
 showingError (Right a) = Right a
 showingError (Left e) = Left $ show e
 
-runDecl :: Declaration -> Repl ()
+runDecl :: Declaration -> FailableRepl ()
 runDecl decl = do
-  n <- introduceDeclaration decl
-  case n of
-    Left (RuntimeError err) -> liftIO $ putStrLn $ err
-    Right name -> liftIO $ putStrLn $ name ++ " defined"
+  name <- introduceDeclaration decl
+  liftIO $ putStrLn $ name ++ " defined"
 
-runExp :: Exp -> Repl ()
+runExp :: Exp -> FailableRepl ()
 runExp e = do
-  e' <- showExp e
-  case e' of
-    Left (RuntimeError err) -> liftIO $ putStrLn $ err
-    Right str -> liftIO $ putStrLn str
+  str <- showExp e
+  liftIO $ putStrLn str
 
-runImport :: String -> Repl ()
+runImport :: String -> FailableRepl ()
 runImport mod = do
-  path <- liftIO $ findModule mod
-  case path of
-    Left err -> liftIO $ putStrLn $ err
-    Right path -> do
-      e <- introduceModule path
-      case e of
-        Left (RuntimeError err) -> liftIO $ putStrLn $ err
-        Right () -> liftIO $ putStrLn $ "Imported " ++ mod
+  path <- findModule mod
+  _ <- introduceModule path
+  liftIO $ putStrLn $ "Imported " ++ mod
 
 -- Evaluation : handle each line user inputs
 cmd :: String -> Repl ()
-cmd input = do
+cmd input = handleError $ do
   case parseLine input of
     PError err -> liftIO $ putStrLn $ "Parse error: " ++ err
     PDecl decl -> runDecl decl
@@ -111,7 +110,7 @@ typeof args = do
         Left err -> liftIO $ putStrLn $ "Error: " ++ err
         Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t
 
-loadFile :: [String] -> Repl ()
+loadFile :: [String] -> FailableRepl ()
 loadFile args = do
   parsed <- liftIO $ parseFile (unwords args)
   case parsed of
@@ -124,7 +123,7 @@ options :: [(String, [String] -> Repl ())]
 options = [
     ("t", typeof),
     ("q", quit),
-    ("load", loadFile)
+    ("load", handleError . loadFile)
   ]
 
 quit :: [String] -> Repl ()
@@ -138,4 +137,5 @@ runRepl = do
   init <- runExceptT makeInitialState
   case init of
     Left (RuntimeError err) -> error $ "Error initializing REPL: " ++ err
-    Right initState -> evalStateT (evalRepl "$> " cmd options completer ini) initState
+    Right initState -> do
+      evalStateT (evalRepl "$> " cmd options completer ini) initState

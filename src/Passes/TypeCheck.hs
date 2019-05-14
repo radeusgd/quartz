@@ -8,9 +8,10 @@ module Passes.TypeCheck(
   extendEnvironment,
   withEnvironment,
   TypeEnv,
-  emptyTypeEnv
+  emptyTypeEnv,
+  inContext
                        ) where
-
+import Prelude hiding (mod, exp)
 import Control.Monad.Reader
 import Control.Monad.Except
 import Control.Monad.State
@@ -20,7 +21,7 @@ import qualified Data.Set as Set
 import Data.Maybe
 import qualified ModuleMap as MM
 
--- import Debug.Trace
+import Debug.Trace
 
 import AST.Desugared
 
@@ -51,10 +52,10 @@ type TypeEnv = MM.ModuleMap QualifiedType
 emptyTypeEnv :: TypeEnv
 emptyTypeEnv = MM.empty
 
-data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFree :: Set.Set Integer, eFreeAtoms :: Set.Set Ident } -- TODO cleanup these
+data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFreeAtoms :: Set.Set Ident } -- TODO cleanup these
 
 emptyEnv :: Env
-emptyEnv = Env MM.empty "???" Set.empty Set.empty
+emptyEnv = Env MM.empty "???" Set.empty
 
 type Subst = M.Map Integer Type
 type TCM a = StateT TcState (ReaderT Env (Either (WithContext TypeError))) a
@@ -96,7 +97,7 @@ readVar = readVar' >=> instantiate
 withVar :: QualifiedIdent -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
   introduceType :: QualifiedIdent -> QualifiedType -> Env -> Env
-  introduceType i qt@(ForAll _ tt) (Env b ctx f a) = Env (MM.insert i qt b) ctx (freeTypeVariables tt `Set.union` f) a -- not sure if I shouldn't add free variables of tt to Env here?
+  introduceType i qt@(ForAll _ tt) (Env b ctx a) = Env (MM.insert i qt b) ctx a
 
 withLocalVars :: [(Ident, QualifiedType)] -> TCM a -> TCM a
 withLocalVars lst m = foldr (uncurry withVar) m (map (\(i, t) -> (IDefault i, t)) lst)
@@ -120,7 +121,7 @@ noSubst :: TCM a -> TCM (a, Subst)
 noSubst = ((\x -> (x, emptySubst)) <$>)
 
 withTopLevelDecls :: Maybe Ident -> [Declaration] -> TCM a -> TCM a
-withTopLevelDecls mod [] m = m
+withTopLevelDecls _ [] m = m
 withTopLevelDecls mod (Function name _ maytype _ : t) m = case maytype of
   Just qt -> withTopLevelDecls mod t $ withVar (qualifyIdent mod name) qt m
   Nothing -> throwErrorWithContext $ TopLevelTypeNotSpecified name
@@ -330,30 +331,27 @@ freeTheAtoms atoms exp = do
   subst <- mapM (\i -> do t <- freshFreeType; return (i, t)) atoms
   return $ freeAtomsE (M.fromList subst) exp
 
-qualifyIdent :: Maybe Ident -> Ident -> QualifiedIdent
-qualifyIdent Nothing i = IDefault i
-qualifyIdent (Just m) i = IQualified m i
-
 withDeclaration' :: Maybe Ident -> Declaration -> TCM a -> TCM (a, Subst)
 withDeclaration' mod (Function name args usertype body) m = do
+  let qualified = qualifyIdent mod name
   (ttype, subst) <- case usertype of -- this implementation would allow for recursion only if the signature is provided
     Nothing -> inferred body
     Just t@(ForAll vars _) -> do
       body' <- freeTheAtoms vars body
-      withVar (qualifyIdent mod name) t $ inferred body'
+      withVar qualified t $ inferred body'
   -- body' <- case usertype of -- this could allow for recursion without explicit type signature
   --   Nothing -> return body
   --   Just (ForAll vars _) -> freeTheAtoms vars body
   -- rectype <- freshFreeType
   -- (ttype, subst) <- withVar name (ForAll [] rectype) $ inferred body'
   -- subst'' <- 
-  -- let qtype = closeType ttype
-  qtype <- generalize ttype
-  -- traceShowM ("withdecl", name, ttype, qtype)
-  res <- withVar (qualifyIdent mod name) qtype $ m
+  let qtype = closeType ttype -- TODO
+  -- qtype <- generalize ttype -- TODO investigate this
+  traceShowM ("withdecl", name, ttype, qtype)
+  res <- withVar qualified qtype $ m
   return (res, subst)
   where inferred body =
-          inContext name $ do
+          extendContext (show $ qualifyIdent mod name) $ do
           (ttype, s) <- inferE' $ buildLambda args body
           case usertype of
             Nothing -> return (ttype, s)
@@ -376,9 +374,9 @@ withDeclaration' mod (DataType dataTypeName typeArgs cases) m = do
 
 inferBlock :: [Declaration] -> Exp -> TCM (Type, Subst)
 inferBlock [] e = inferE' e
-inferBlock (d : tail) e = do
-  ((bl, s1), s2) <- withDeclaration' Nothing d $ inferBlock tail e
-  return (substitute s2 bl, s1 <#> s2)
+inferBlock (d : t) e = do
+  ((bl, s1), s2) <- withDeclaration' Nothing d $ inferBlock t e
+  return (substitute (s1 <#> s2) bl, s1 <#> s2)
 
 literalType :: Literal -> TCM Type
 literalType (LStr _) = return $ Atom $ IDefault "String"
@@ -407,10 +405,12 @@ inferType m = head <$> inferTypes ((:[]) <$> m)
 
 typeCheckTopLevel :: Maybe Ident -> [Declaration] -> TCM ()
 typeCheckTopLevel mod decls =
-  withTopLevelDecls mod decls (inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
+  withTopLevelDecls mod decls (asks eBindings >>= traceShowM . MM.modules >> inferBlock decls (EConst $ LUnit)) >> return () -- dummy expression, we just want to make sure everything typechecks
 
 extendEnvironment :: Maybe Ident -> TypeEnv -> [Declaration] -> TCM TypeEnv
-extendEnvironment mod e decls = withEnvironment e $ withTopLevelDecls mod decls $ typeCheckTopLevel mod decls >> asks eBindings
+extendEnvironment mod e decls = do
+  typeCheckTopLevel mod decls
+  withEnvironment e $ withTopLevelDecls mod decls $ asks eBindings
 
 withEnvironment :: TypeEnv -> TCM a -> TCM a
-withEnvironment te = local (\_ -> Env te "???" Set.empty Set.empty)
+withEnvironment te = local (\_ -> Env te "???" Set.empty)

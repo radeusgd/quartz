@@ -1,5 +1,6 @@
 module Interpreter where
 
+import Prelude hiding(mod, exp)
 import Data.Map as M
 import Data.List as List
 import qualified ModuleMap as MM
@@ -129,6 +130,9 @@ emptyMemory = Memory M.empty 0 0
 inOtherEnv :: Env -> Interpreter a -> Interpreter a
 inOtherEnv env = local (\r -> env { fuelLimit = fuelLimit r} ) -- change to different env but preserve the fuelLimit
 
+localEnv :: (MM.ModuleMap Loc -> MM.ModuleMap Loc) -> Interpreter a -> Interpreter a
+localEnv mod = local (\r -> r { vars = mod (vars r) })
+
 fromLiteral :: Desugared.Literal -> Interpreter Value
 fromLiteral (LStr s) = return $ VStr s
 fromLiteral (LInt s) = return $ VInt s
@@ -203,13 +207,33 @@ buildNArgFunction n builder = makeLazy $ return $ VFunction "x" emptyEnv $ do
   x <- readVarLazy $ IDefault "x"
   buildNArgFunction (n - 1) (\args -> builder (x:args))
 
-processDefinition :: Env -> Declaration -> Interpreter Env
-processDefinition env (Function name args _ exp) = do
-  loc <- alloc
-  let env' = bind (IDefault name) loc env
-  val <- inOtherEnv env' $ buildFunction args exp
+processDefinition :: Maybe Ident -> Env -> Declaration -> Interpreter Env
+processDefinition mod env def = processDefinitions mod env [def]
+
+processDefinitions :: Maybe Ident -> Env -> [Declaration] -> Interpreter Env
+processDefinitions mod env defs = do
+  locs <- mapM allocDefinition defs
+  let defsWithLocs = zip locs defs
+  let bindDefs e = List.foldl' (\env -> \(loc, def) -> bindDefintion mod def loc env) e defsWithLocs
+  local bindDefs $ mapM_ (uncurry setDefinitionValue) defsWithLocs
+  return $ bindDefs env
+
+allocDefinition :: Declaration -> Interpreter [Loc]
+allocDefinition (Function _ _ _ _) = (:[]) <$> alloc
+allocDefinition (DataType _ _ cases) = mapM (\_ -> alloc) cases
+
+bindDefintion :: Maybe Ident -> Declaration -> [Loc] -> Env -> Env
+bindDefintion mod (Function name _ _ _) [loc] env = bind (qualifyIdent mod name) loc env
+bindDefintion _ (Function _ _ _ _) _ _ = error "Wrong amount of locations prepared for function"
+bindDefintion mod (DataType name _ cases) locs env = do
+  let casesWithLocs = zip cases locs
+  List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind (qualifyIdent mod name) loc env) env casesWithLocs
+
+setDefinitionValue :: [Loc] -> Declaration -> Interpreter ()
+setDefinitionValue [loc] (Function name args _ exp) = do
+  val <- buildFunction args exp
   setValue loc val
-  return env' where
+  where
     buildFunction :: [String] -> Exp -> Interpreter LazyValue
     buildFunction [] e = interpret e
     buildFunction [h] e =
@@ -219,13 +243,10 @@ processDefinition env (Function name args _ exp) = do
     buildFunction (h:t) e = do
       env <- ask
       makeLazy $ return $ VFunction h env (buildFunction t e)
-
-processDefinition env (DataType name typeargs cases) = do -- TODO are typeargs here needed for anything? likely not
-  locs <- mapM (\_ -> alloc) cases
-  let casesWithLocs = zip cases locs
-  let env' = List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind (IDefault name) loc env) env casesWithLocs
-  inOtherEnv env' $ mapM_ defineCase casesWithLocs
-  return env'
+setDefinitionValue _ (Function _ _ _ _) = error "Wrong amount of locations prepared for function"
+setDefinitionValue locations (DataType _ _ cases) = do -- TODO are typeargs here needed for anything? likely not
+  let casesWithLocs = zip cases locations
+  mapM_ defineCase casesWithLocs
   where
     defineCase :: (DataTypeCase, Loc) -> Interpreter ()
     defineCase (DataTypeCase caseName argtypes, loc) = do
@@ -240,7 +261,7 @@ interpret :: Exp -> Interpreter LazyValue
 interpret (EConst  c) = makeLazy $ fromLiteral c
 interpret (EBlock decls e) = do
   env <- ask
-  innerEnv <- foldM processDefinition env decls
+  innerEnv <- foldM (processDefinition Nothing) env decls
   inOtherEnv innerEnv $ interpret e
 interpret (EVar v) = makeLazy $ readVar v
 interpret (ELambda argname exp) = do
@@ -294,12 +315,12 @@ runInterpreter i = do
   r <- execInterpreter emptyEnv emptyMemory i
   return $ fst <$> r
 
-withDeclared :: [Declaration] -> Interpreter a -> Interpreter a
-withDeclared [] i = i
-withDeclared (h:t) i = do
+withDeclared :: Maybe Ident -> [Declaration] -> Interpreter a -> Interpreter a
+withDeclared _ [] i = i
+withDeclared mod (h:t) i = do
   env <- ask
-  env' <- processDefinition env h
-  inOtherEnv env' $ withDeclared t i
+  env' <- processDefinition mod env h
+  inOtherEnv env' $ withDeclared mod t i
 
 execInterpreter :: Env -> Memory -> Interpreter a -> IO (Either ErrorType (a, Memory))
 execInterpreter env mem i = runExceptT $ runStateT (runReaderT i env) mem

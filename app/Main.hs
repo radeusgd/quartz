@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
 import System.IO
@@ -94,16 +95,20 @@ runExtract fname = do
 runMain :: [Declaration] -> IO (Either Interpreter.ErrorType String)
 runMain decls = error "TODO " -- runInterpreter $ withBuiltins $ withDeclared decls $ interpret (EVar $ IDefault "main") >>= ishow RunIO
 
-handleError :: Show e => MonadIO m => Either e a -> m a
-handleError (Left e) = (liftIO $ putStrLn $ "Error: " ++ show e) >> (liftIO $ exitFailure)
-handleError (Right e) = return e
+handleErrorByFailing :: MonadIO m => ExceptT RuntimeError m a -> m a
+handleErrorByFailing m = do
+  r <- runExceptT m
+  case r of
+    Left err -> liftIO $ print err >> exitFailure
+    Right a -> return a
 
 runImportAndMain :: FilePath -> StateT RState IO ()
 runImportAndMain path = do
-  introduceModule path >>= handleError
-  _ <- showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
-  return ()
-  -- TODO doesn't seem to evaluate
+  handleErrorByFailing $ introduceModule path
+  te <- gets rsTypeEnv
+  liftIO $ print $ varsFromEnv te
+  res <- handleErrorByFailing $ showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
+  liftIO $ print res
 
 runRun :: String -> IO ()
 runRun fname = do
