@@ -1,8 +1,10 @@
 data MaybeI = Some Int | None;
 
+defop <>[a][b][c](f: b -> c, g: a -> b): a -> c = \x -> f (g x);
+
 def getOrElse [a](m: MaybeI, default: Int): Int = case m of {
     | Some x -> x
     | None -> default
 };
 
-def main(): Int = getOrElse (Some 4) 0;
+def main(): IO () = (print <> toString) (getOrElse (Some 4) 0);

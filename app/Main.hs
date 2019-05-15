@@ -90,7 +90,6 @@ runImportAndMain :: FilePath -> StateT RState IO ()
 runImportAndMain path = do
   handleErrorByFailing $ introduceModule path
   te <- gets rsTypeEnv
-  liftIO $ print $ varsFromEnv te
   _ <- handleErrorByFailing $ showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
   return ()
 

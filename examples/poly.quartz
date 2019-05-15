@@ -33,11 +33,11 @@ def id4[a](x: a): a = {
     f x
 };
 
-def main(): String =
+def main(): IO () = print (
     (toString (let1 3)) <+>
     (const "const" 3) <+>
     (id "a") <+>
     (idlet "b") <+>
     (idStrange id "c") <+>
     (id3 "d") <+>
-    (id4 "e");
+    (id4 "e"));

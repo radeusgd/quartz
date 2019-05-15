@@ -11,6 +11,8 @@ import AST.Desugared
 import Interpreter
 import AppCommon
 import Runtime
+import Data.Text.Prettyprint.Doc as Pretty
+import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
 import System.Console.Repline
 import System.Exit ( exitFailure, exitSuccess )
@@ -135,7 +137,11 @@ options = [
     ("t", typeof),
     ("q", quit),
     ("load", handleError . loadFile),
-    ("inspectMemory", inspectMemory)
+    ("inspectMemory", inspectMemory),
+    ("parseExp", \args -> let s = unwords args in case parseExp s of
+        Left err -> liftIO $ putStrLn $ "Parse error: " ++ err
+        Right tree -> liftIO $ (PrettyText.putDoc $ Pretty.pretty tree) >> putStrLn ""
+    )
   ]
 
 quit :: [String] -> Repl ()

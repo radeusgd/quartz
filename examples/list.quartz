@@ -1,26 +1,31 @@
-data List a = Nil | Cons a * (List a);
+data EList a = ENil | ECons a * (EList a);
 
-data MaybeInt = Nothing | Just Int;
+data Maybe a = Nothing | Just a;
 
-def head[a](x: List a): a = case x of {
-    | Cons h t -> h
-    | Nil -> error "empty list"
+def head[a](x: EList a): a = case x of {
+    | ECons h t -> h
+    | ENil -> error "empty list"
 };
 
-def headMay(x: List Int): MaybeInt = case x of {
-    | Cons h t -> Just h
-    | Nil -> Nothing
+def headMay(x: EList Int): Maybe Int = case x of {
+    | ECons h t -> Just h
+    | ENil -> Nothing
 };
 
-val lst: List Int = [-1, 0, 1];
-
-def length[a](l: List a): Int = case l of {
-    | Cons h t -> 1 + (length t)
-    | Nil -> 0
+def listToEList[a](l: List a): EList a = case l of {
+    | Cons h t -> ECons h (listToEList t)
+    | Nil -> ENil
 };
 
-def range(start: Int, stop: Int): List Int = if start > stop then Nil else (Cons start (range (start + 1) stop));
+val lst: EList Int = listToEList [-1, 0, 1];
 
-val l2: List Int = range 0 10;
+def length[a](l: EList a): Int = case l of {
+    | ECons h t -> 1 + (length t)
+    | ENil -> 0
+};
 
-def main(): String = (toString (head lst)) <+> "\n" <+> (toString (length l2)) <+> "\n" <+> (toString l2);
+def range(start: Int, stop: Int): EList Int = if (start > stop) then ENil else (ECons start (range (start + 1) stop));
+
+val l2: EList Int = range 0 10;
+
+def main(): IO () = print ((toString (head lst)) <+> "\n" <+> (toString (length l2)) <+> "\n" <+> (toString l2));

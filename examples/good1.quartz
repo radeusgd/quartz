@@ -6,4 +6,4 @@ def dec(a: Int, b: Int): Int = 10 * a + b; // test
 aaa
 */
 
-def main(): String = toString (dec 4 2);
+def main(): IO () = print (toString (dec 4 2));

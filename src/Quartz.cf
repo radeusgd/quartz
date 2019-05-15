@@ -46,8 +46,8 @@ separator nonempty Type2 "" ;
 coercions Type 2 ;
 -- TODO complex types, typeclasses
 
+ECustomOp. Exp1 ::= Exp2 CustomOperator Exp1 ;
 EApp. Exp2 ::= Exp2 Exp3 ;
-ECustomOp. Exp2 ::= Exp2 CustomOperator Exp3 ;
 EIfThenElse. Exp2 ::= "if" Exp2 "then" Exp3 "else" Exp3 ;
 ELambda. Exp1 ::= "\\" QIdent "->" Exp2 ;
 EAdd. Exp3 ::= Exp3 "+" Exp4 ;

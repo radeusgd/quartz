@@ -1,8 +1,10 @@
+import Prelude;
+
 data B = T | F;
 
-def not(x: B): B = case x of {
+def neg(x: B): B = case x of {
     | T -> F
     | F -> T
 };
 
-def main(): String = toString (not T);
+def main(): IO () = print $ toString $ neg F;
