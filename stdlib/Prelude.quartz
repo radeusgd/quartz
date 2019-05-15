@@ -17,6 +17,14 @@ def and(a: Bool, b: Bool): Bool = case a of {
     | True -> b
 };
 
+def fst[a][b](t: Tuple2 a b): a = case t of {
+    | Tuple2 a b -> a
+};
+
+def snd[a][b](t: Tuple2 a b): b = case t of {
+    | Tuple2 a b -> b
+};
+
 defop !=[a](x: a, y: a): Bool = not (x == y);
 
 def compose[a][b][c](f: a -> b, g: b -> c): a -> c = \a -> g (f a);

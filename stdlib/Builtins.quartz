@@ -25,7 +25,12 @@ defop >>= [a][b](m: IO a, f: (a -> IO b)): IO b = ???;
 defop >>[a][b](x: IO a, y: IO b): IO b = ???;
 def return[a](x: a): IO a = ???;
 def limit[a](maxApplications: Int, expr: a): Maybe a = ???;
-def countInstructions[a](expr: a): Int = ???; // TODO make it return (a, Int)
+def countInstructions[a](expr: a): Tuple2 a Int = ???;
 def seq[a][b](a: a, b: b): b = ???;
 
 data List a = Cons a * List a | Nil;
+data Tuple1 a = Tuple1 a;
+data Tuple2 a b = Tuple2 a * b;
+data Tuple3 a b c = Tuple3 a * b * c;
+data Tuple4 a b c d = Tuple4 a * b * c * d;
+data Tuple5 a b c d e = Tuple5 a * b * c * d * e;

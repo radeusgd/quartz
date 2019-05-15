@@ -64,6 +64,7 @@ EUndefined. Exp5 ::= "???" ;
 EUnit. Exp5 ::= "()" ;
 EBlock. Exp5 ::= "{" [Declaration] Exp "}" ;
 EList. Exp5 ::= "[" [Exp] "]" ;
+ETuple. Exp5 ::= "(" Exp "," [Exp] ")" ;
 EMatch. Exp5 ::= "case" Exp "of" "{" [Case] "}" ;
 EDo. Exp5 ::= "do" "{" [DoClause] "}" ;
 separator Exp "," ;

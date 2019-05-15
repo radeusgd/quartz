@@ -16,7 +16,6 @@ import Passes.Desugar
 import System.IO
 import Interpreter
 import Linker
-import Debug.Trace
 import Constants
 
 loadBuiltinDecls :: IO [Declaration]
@@ -106,11 +105,19 @@ unpackBool (VDataType "True" []) = True
 unpackBool (VDataType "False" []) = False
 unpackBool other = error (show other ++ " is not a valid Boolean type")
 
+makeTupleN :: Integer -> Value
+makeTupleN n = go n [] where
+  go :: Integer -> [Value] -> Value
+  go 0 vals = VDataType ("Tuple" ++ show n) $ reverse vals
+  go k vals = if k < 0 then error "Negative tuple? Nonsense"
+    else VFunction "x" emptyEnv $ do
+       x <- readVar $ IDefault "x"
+       makeLazy $ return $ go (k - 1) (x:vals)
+
 builtins :: [(String, Value)]
 builtins = [
   ("True", makeBool True),
   ("False", makeBool False),
-  -- TODO actually plus should be polymorphic... but for now let's skip this
   ("+", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x + y)),
   ("*", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x * y)),
   ("-", (make2ArgFun $ \(VInt x) -> \(VInt y) -> VInt $ x - y)),
@@ -133,7 +140,12 @@ builtins = [
   ("countInstructions", make1ArgFunLazy countInstructions),
   ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b),
   ("Nil", makeNil),
-  ("Cons", make2ArgFun makeCons)
+  ("Cons", make2ArgFun makeCons),
+  ("Tuple1", makeTupleN 1),
+  ("Tuple2", makeTupleN 2),
+  ("Tuple3", makeTupleN 3),
+  ("Tuple4", makeTupleN 4),
+  ("Tuple5", makeTupleN 5)
            ] where
   sequenceIO :: LazyValue -> LazyValue -> Interpreter LazyValue
   sequenceIO m' f' = makeLazy $ return $ VIO $ makeLazy $ do
@@ -159,9 +171,9 @@ builtins = [
   countInstructions :: LazyValue -> Interpreter LazyValue
   countInstructions lval = makeLazy $ do
     start <- gets usedFuel
-    _ <- force lval -- TODO change to returning a tuple with result
+    res <- force lval
     end <- gets usedFuel
-    return $ VInt $ fromIntegral (end - start)
+    return $ VDataType "Tuple2" [res, VInt $ fromIntegral (end - start)]
 
 -- def print(msg: String): IO () = ???;
 -- def readLine() : IO String = ???;

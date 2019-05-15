@@ -4,8 +4,9 @@ module Passes.Desugar(
   desugarDeclaration,
                     ) where
 
-import Data.Maybe
+import Prelude hiding (mod, exp)
 -- import Data.String.Utils
+import Data.List as List
 import Quartz.Syntax.AbsQuartz as A
 import AST.Desugared as D
 import Constants
@@ -48,6 +49,9 @@ desugarExpression (A.EMatch e cases) =
 desugarExpression (A.ELambda (QIdent (_, v)) e) = D.ELambda v (desugarExpression e)
 desugarExpression (A.EDo clauses) = desugarDoNotation clauses
 desugarExpression (A.EList elems) = desugarList elems
+desugarExpression (A.ETuple first rest) =
+  let elems = first : rest in
+    List.foldl' D.EApplication (D.EVar $ IQualified "Builtins" $ "Tuple" ++ show (length elems)) $ map desugarExpression elems
 
 desugarQualified :: A.QualifiedIdentifier -> D.QualifiedIdent
 desugarQualified (A.Qualified mod ident) = IQualified (desugarQIdent mod) (desugarQIdent ident)
@@ -73,7 +77,7 @@ desugarType (A.Abstraction ta tb) = D.Abstraction (desugarType ta) (desugarType 
 buildApplicationType :: [D.Type] -> D.Type -> D.Type
 buildApplicationType args rettype = go (reverse args) rettype where
   go [] t = t
-  go (h:t) rettype = go t (D.Abstraction h rettype) -- we first apply the innermost abstraction, that is the last argument
+  go (h:t) tt = go t (D.Abstraction h tt) -- we first apply the innermost abstraction, that is the last argument
 
 desugarDeclaration :: A.Declaration -> D.Declaration
 desugarDeclaration (A.Func (QIdent (_, name)) qualifiers args rettype exp) =

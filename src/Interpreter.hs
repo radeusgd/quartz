@@ -39,7 +39,7 @@ instance Show Value where
   show (VIO _) = "IO ???"
 
 unpackList :: Value -> [Value]
-unpackList (VDataType "Cons" [v, tail]) = v : unpackList tail
+unpackList (VDataType "Cons" [v, t]) = v : unpackList t
 unpackList (VDataType "Nil" []) = []
 unpackList _ = error "Malformed list represtantation"
 
@@ -68,7 +68,7 @@ instance Show Thunk where
   show (ThunkLazy _) = "[unevaluated thunk]"
   show (ThunkComputed v) = show v
 
-data Memory = Memory { locs :: Map Loc Thunk, maxloc :: Loc, usedFuel :: Int }
+data Memory = Memory { thunks :: Map Loc Thunk, maxloc :: Loc, usedFuel :: Int }
 
 type InState = StateT Memory (ExceptT ErrorType IO)
 type Interpreter = ReaderT Env InState
@@ -88,8 +88,8 @@ isFuelLimitExceeded = do
 useFuel :: Int -> Interpreter ()
 useFuel units = do
   modify $ \s -> s { usedFuel = usedFuel s + units }
-  used <- gets usedFuel
-  limit <- asks fuelLimit
+  -- used <- gets usedFuel
+  -- limit <- asks fuelLimit
   -- traceShowM ("Using ", units, "; ", used, "/", limit)
   exceeded <- isFuelLimitExceeded
   if exceeded then throwError outOfFuelMessage else return ()
@@ -151,7 +151,7 @@ readThunk :: QualifiedIdent -> Interpreter (Loc, Thunk)
 readThunk v = do
   env <- asks vars
   loc <- raiseEitherToError $ MM.lookup v env
-  mem <- gets locs
+  mem <- gets thunks
   let valM = M.lookup loc mem
   thunk <- getJustOrError ("Memory location for variable " ++ show v ++ " seems to be not allocated, this shouldn't happen.") valM
   return (loc, thunk)
@@ -163,7 +163,7 @@ readVar v = do
     ThunkComputed val -> return val
     ThunkLazy lv -> do
       val <- force lv
-      modify (\s -> s { locs = M.insert loc (ThunkComputed val) (locs s) })
+      modify (\s -> s { thunks = M.insert loc (ThunkComputed val) (thunks s) })
       return val
 
 readVarLazy :: QualifiedIdent -> Interpreter LazyValue
@@ -186,11 +186,11 @@ setValue :: Loc -> LazyValue -> Interpreter ()
 setValue loc val = lift $ setValue' loc val
 
 setValueEager :: Loc -> Value -> Interpreter ()
-setValueEager loc val = modify (\s -> s { locs = M.insert loc (ThunkComputed val) (locs s) })
+setValueEager loc val = modify (\s -> s { thunks = M.insert loc (ThunkComputed val) (thunks s) })
 
 setValue' :: Loc -> LazyValue -> InState ()
 setValue' loc val = modify go where
-  go s = s { locs = M.insert loc (ThunkLazy val) (locs s) }
+  go s = s { thunks = M.insert loc (ThunkLazy val) (thunks s) }
 
 force :: LazyValue -> Interpreter Value
 force (Lazy e vi) = inOtherEnv e vi
@@ -210,12 +210,12 @@ processDefinition :: Maybe Ident -> Env -> Declaration -> Interpreter Env
 processDefinition mod env def = processDefinitions mod env [def]
 
 processDefinitions :: Maybe Ident -> Env -> [Declaration] -> Interpreter Env
-processDefinitions mod env defs = do
+processDefinitions mod env0 defs = do
   locs <- mapM allocDefinition defs
   let defsWithLocs = zip locs defs
   let bindDefs e = List.foldl' (\env -> \(loc, def) -> bindDefintion mod def loc env) e defsWithLocs
   local bindDefs $ mapM_ (uncurry setDefinitionValue) defsWithLocs
-  return $ bindDefs env
+  return $ bindDefs env0
 
 allocDefinition :: Declaration -> Interpreter [Loc]
 allocDefinition (Function _ _ _ _) = (:[]) <$> alloc
@@ -224,12 +224,12 @@ allocDefinition (DataType _ _ cases) = mapM (\_ -> alloc) cases
 bindDefintion :: Maybe Ident -> Declaration -> [Loc] -> Env -> Env
 bindDefintion mod (Function name _ _ _) [loc] env = bind (qualifyIdent mod name) loc env
 bindDefintion _ (Function _ _ _ _) _ _ = error "Wrong amount of locations prepared for function"
-bindDefintion mod (DataType name _ cases) locs env = do
+bindDefintion mod (DataType _ _ cases) locs env0 = do
   let casesWithLocs = zip cases locs
-  List.foldl' (\env -> \(DataTypeCase name _, loc) -> bind (qualifyIdent mod name) loc env) env casesWithLocs
+  List.foldl' (\env -> \(DataTypeCase caseName _, loc) -> bind (qualifyIdent mod caseName) loc env) env0 casesWithLocs
 
 setDefinitionValue :: [Loc] -> Declaration -> Interpreter ()
-setDefinitionValue [loc] (Function name args _ exp) = do
+setDefinitionValue [loc] (Function _ args _ exp) = do
   val <- buildFunction args exp
   setValue loc val
   where
@@ -243,7 +243,7 @@ setDefinitionValue [loc] (Function name args _ exp) = do
       env <- ask
       makeLazy $ return $ VFunction h env (buildFunction t e)
 setDefinitionValue _ (Function _ _ _ _) = error "Wrong amount of locations prepared for function"
-setDefinitionValue locations (DataType _ _ cases) = do -- TODO are typeargs here needed for anything? likely not
+setDefinitionValue locations (DataType _ _ cases) = do
   let casesWithLocs = zip cases locations
   mapM_ defineCase casesWithLocs
   where
@@ -265,16 +265,16 @@ interpret (EVar v) = makeLazy $ readVar v
 interpret (ELambda argname exp) = do
   env <- ask
   makeLazy $ return $ VFunction argname env (interpret exp)
-interpret (ECaseOf e cases) = do
-  matched <- interpret e >>= force
+interpret (ECaseOf exp cases) = do
+  matched <- interpret exp >>= force
   case matched of
     (VDataType constructorName args) -> matchCase constructorName args cases
     _ -> throwError "Trying to match over a non-data type (why didn't typechecker catch this?)"
   where
-    matchCase constructorName dataargs [] =
+    matchCase _ _ [] =
       throwError "Non-exhaustive pattern match"
-    -- TODO add support for pattern matching from different modules!
-    matchCase _ _ (ECase (IQualified _ _) _ _:_) = error "TODO qualified pattern matching"
+    -- TODO add support for pattern matching from different modules
+    matchCase _ _ (ECase (IQualified _ _) _ _:_) = throwError "Pattern matching over qualified names is not implemented. Ensure your datatypes have unique constructor names."
     matchCase constructorName dataargs (ECase (IDefault name) args e:t) =
       if name /= constructorName then matchCase constructorName dataargs t
       else if length dataargs /= length args then throwError "Datatype arguments count mismatch (data representation and case match have different number of arguments), shouldn't ever happen"

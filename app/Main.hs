@@ -79,7 +79,7 @@ runExtract fname = do
     buildFunction ret (h:t) = Abstraction h (buildFunction ret t)
     printCase rettype (DataTypeCase name fields) = putStrLn $ name ++ ": " ++ show (buildFunction rettype fields)
 
-handleErrorByFailing :: MonadIO m => ExceptT RuntimeError m a -> m a
+handleErrorByFailing :: MonadIO m => ExceptT String m a -> m a
 handleErrorByFailing m = do
   r <- runExceptT m
   case r of
@@ -97,7 +97,7 @@ runRun :: String -> IO ()
 runRun fname = do
   i <- runExceptT makeInitialState
   case i of
-    Left (RuntimeError err) -> (putStrLn $ "Error initializing the runtime: " ++ err) >> exitFailure
+    Left err -> (putStrLn $ "Error initializing the runtime: " ++ err) >> exitFailure
     Right initState -> evalStateT (runImportAndMain fname) initState >> exitSuccess
 
 main :: IO ()

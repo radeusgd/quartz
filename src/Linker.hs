@@ -1,23 +1,20 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Linker where
 
-import Data.Map as M
+import Prelude hiding (mod)
 import Control.Monad.Except
+import System.Directory
 
 findStdLib :: IO FilePath
 findStdLib = return "stdlib" -- TODO
--- import AST.Typed
--- import Passes.TypeCheck
 
--- ensureTypeSpecified :: Type -> Bool
--- ensureTypeSpecified (Atom _) = True
--- ensureTypeSpecified (Abstraction a b) = ensureTypeSpecified a && ensureTypeSpecified b
--- ensureTypeSpecified (FreeParameter _) = False
+moduleSearchDirectories :: IO [FilePath]
+moduleSearchDirectories = return [".", "./stdlib/"] -- TODO add env, detect stdlib better
 
--- ensureTyped :: Declaration -> Bool
--- ensureTyped (Function tt _ _ _) = ensureTypeSpecified tt
-
--- introduceTopLevelTypes :: [Declaration] -> Env -> Either TypeError Env
--- introduceTopLevelTypes [] e = return e
--- introduceTopLevelTypes (d@(Function tt name _ _) : t) e =
---   if not $ ensureTyped d then throwError (TopLevelTypeNotSpecified name)
---   else introduceTopLevelTypes t (M.insert name tt e)
+findModule :: MonadError String m => MonadIO m => String -> m String
+findModule mod = do
+  dirs <- liftIO $ moduleSearchDirectories
+  f <- liftIO $ findFile dirs (mod ++ ".quartz")
+  case f of
+    Nothing -> throwError $ ("Cannot find module " ++ mod)
+    Just path -> return path

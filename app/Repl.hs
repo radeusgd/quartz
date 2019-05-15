@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
 module Repl where
 
+import Prelude hiding (mod, exp)
 import Quartz.Syntax.LexQuartz as Lex
 import Quartz.Syntax.ParQuartz as Par
 import qualified Quartz.Syntax.AbsQuartz as Abs
@@ -11,11 +12,12 @@ import AST.Desugared
 import Interpreter
 import AppCommon
 import Runtime
+import Linker
 import Data.Text.Prettyprint.Doc as Pretty
 import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
 import System.Console.Repline
-import System.Exit ( exitFailure, exitSuccess )
+import System.Exit ( exitSuccess, exitFailure )
 import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Except
@@ -24,12 +26,12 @@ import qualified ModuleMap as MM
 import qualified Data.Map as Map
 
 type Repl = HaskelineT (StateT RState IO)
-type FailableRepl = ExceptT RuntimeError Repl
+type FailableRepl = ExceptT String Repl
 
 handleError :: FailableRepl () -> Repl ()
 handleError m = do
-  e <- runExceptT m
-  case e of
+  r <- runExceptT m
+  case r of
     Left e -> liftIO $ print e
     Right () -> return ()
 
@@ -83,6 +85,7 @@ cmd input = handleError $ do
     PExp exp -> runExp exp
     PImport mod -> runImport mod
 
+completer :: CompleterStyle (StateT RState IO)
 completer = Prefix (wordCompleter complete) [(":load", fileCompleter)]
 
 varsFromEnv :: TypeEnv -> [String]
@@ -102,12 +105,10 @@ help args = liftIO $ print $ "Help: " ++ show args
 typeof :: [String] -> Repl ()
 typeof args = do
   tenv <- gets rsTypeEnv
-  let exp = parseExp (unwords args)
-  case exp of
+  case parseExp (unwords args) of
     Left err -> liftIO $ putStrLn $ "Error: " ++ err
     Right exp ->
-      let t = showingError $ inferType $ withEnvironment tenv $ inferE exp in
-      case t of
+      case showingError $ inferType $ withEnvironment tenv $ inferE exp of
         Left err -> liftIO $ putStrLn $ "Error: " ++ err
         Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t
 
@@ -115,7 +116,7 @@ inspectMemory :: [String] -> Repl ()
 inspectMemory [arg] = do
   let loc = read arg :: Loc
   mem <- gets rsMem
-  let locations = locs mem
+  let locations = thunks mem
   case Map.lookup loc locations of
     Nothing -> liftIO $ putStrLn "No data under this address"
     Just (ThunkComputed v) -> liftIO $ print v
@@ -152,8 +153,8 @@ ini = liftIO $ putStrLn "Welcome to the Quartz REPL!"
 
 runRepl :: IO ()
 runRepl = do
-  init <- runExceptT makeInitialState
-  case init of
-    Left (RuntimeError err) -> error $ "Error initializing REPL: " ++ err
+  initialState <- runExceptT makeInitialState
+  case initialState of
+    Left err -> (putStrLn $ "Error initializing REPL: " ++ err) >> exitFailure
     Right initState -> do
       evalStateT (evalRepl "$> " cmd options completer ini) initState

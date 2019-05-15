@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module AST.Desugared where
 
+import Prelude hiding (mod, exp)
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.String
 

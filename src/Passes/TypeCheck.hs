@@ -21,8 +21,6 @@ import qualified Data.Set as Set
 import Data.Maybe
 import qualified ModuleMap as MM
 
-import Debug.Trace
-
 import AST.Desugared
 
 data WithContext a = WithContext a String
@@ -52,7 +50,7 @@ type TypeEnv = MM.ModuleMap QualifiedType
 emptyTypeEnv :: TypeEnv
 emptyTypeEnv = MM.empty
 
-data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFreeAtoms :: Set.Set Ident } -- TODO cleanup these
+data Env = Env { eBindings :: TypeEnv, eCtx :: String, eFreeAtoms :: Set.Set Ident }
 
 emptyEnv :: Env
 emptyEnv = Env MM.empty "???" Set.empty
@@ -97,7 +95,7 @@ readVar = readVar' >=> instantiate
 withVar :: QualifiedIdent -> QualifiedType -> TCM a -> TCM a
 withVar i t m = local (introduceType i t) m where
   introduceType :: QualifiedIdent -> QualifiedType -> Env -> Env
-  introduceType i qt@(ForAll _ tt) (Env b ctx a) = Env (MM.insert i qt b) ctx a
+  introduceType _ qt@(ForAll _ _) (Env b ctx a) = Env (MM.insert i qt b) ctx a
 
 withLocalVars :: [(Ident, QualifiedType)] -> TCM a -> TCM a
 withLocalVars lst m = foldr (uncurry withVar) m (map (\(i, t) -> (IDefault i, t)) lst)
@@ -148,10 +146,10 @@ substituteAtoms :: M.Map Ident Type -> Type -> Type
 substituteAtoms m a@(Atom (IDefault i)) = case M.lookup i m of
   Just t -> t -- replace atom if it's in substitution map
   Nothing -> a -- otherwise, leave it as-is
-substituteAtoms m a@(Atom _) = a
+substituteAtoms _ a@(Atom _) = a
 substituteAtoms m (Abstraction a b) = Abstraction (substituteAtoms m a) (substituteAtoms m b)
 substituteAtoms m (Construction a b) = Construction (substituteAtoms m a) (substituteAtoms m b)
-substituteAtoms m fp@(FreeVariable _) = fp
+substituteAtoms _ fp@(FreeVariable _) = fp
 
 withFreeAtoms :: [Ident] -> TCM a -> TCM a
 withFreeAtoms atoms m = local (\s -> s { eFreeAtoms = eFreeAtoms s `Set.union` Set.fromList atoms }) m
@@ -281,7 +279,7 @@ getCaseArgTypes (ECase name args _) = do
   return $ zip args $ map (ForAll []) argtypes
   where
     getFirstNTypes 0 _ = []
-    getFirstNTypes 1 (Abstraction a b) = [a]
+    getFirstNTypes 1 (Abstraction a _) = [a]
     getFirstNTypes 1 other = [other]
     getFirstNTypes n (Abstraction a b) = a : getFirstNTypes (n-1) b
     getFirstNTypes _ _ = error "Constructor arity error"
@@ -315,16 +313,16 @@ freeAtomsQT m (ForAll vars tt) =
 
 freeAtomsD :: M.Map Ident Type -> Declaration -> Declaration
 freeAtomsD m (Function name args maytype body) = Function name args (freeAtomsQT m <$> maytype) (freeAtomsE m body)
-freeAtomsD m (DataType _ _ _) = error "TODO"
+freeAtomsD _ (DataType _ _ _) = error "TODO"
 
 freeAtomsE :: M.Map Ident Type -> Exp -> Exp
 freeAtomsE m (EApplication a b) = EApplication (freeAtomsE m a) (freeAtomsE m b)
 freeAtomsE m (ELambda x e) = ELambda x (freeAtomsE m e)
 freeAtomsE m (ECaseOf e cases) = ECaseOf (freeAtomsE m e) (map freeAtomsCase cases) where
-  freeAtomsCase (ECase n args e) = ECase n args $ freeAtomsE m e
+  freeAtomsCase (ECase n args _) = ECase n args $ freeAtomsE m e
 freeAtomsE m (EBlock decls e) = EBlock (map (freeAtomsD m) decls) (freeAtomsE m e)
-freeAtomsE m v@(EVar _) = v
-freeAtomsE m c@(EConst _) = c
+freeAtomsE _ v@(EVar _) = v
+freeAtomsE _ c@(EConst _) = c
 
 freeTheAtoms :: [Ident] -> Exp -> TCM Exp
 freeTheAtoms atoms exp = do
@@ -350,13 +348,13 @@ withDeclaration' mod (Function name args usertype body) m = do
   -- traceShowM ("withdecl", name, ttype, qtype)
   res <- withVar qualified qtype $ m
   return (res, subst)
-  where inferred body =
+  where inferred body' =
           extendContext (show $ qualifyIdent mod name) $ do
-          (ttype, s) <- inferE' $ buildLambda args body
+          (ttype, s) <- inferE' $ buildLambda args body'
           case usertype of
             Nothing -> return (ttype, s)
               -- make sure user specified type fits with inferred
-            Just tt@(ForAll vars _) -> do
+            Just tt@(ForAll _ _) -> do
               tt' <- instantiateRigid tt
               s' <- unify ttype tt'
               let ts = substitute s' ttype
