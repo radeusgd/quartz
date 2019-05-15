@@ -305,7 +305,6 @@ inferCases cases = do
 withDeclaration :: Maybe Ident -> Declaration -> TCM a -> TCM a
 withDeclaration mod d m = fst <$> withDeclaration' mod d m
 
--- TODO this freeAtoms over Expressions and Declarations should be refactored into some kind of fmap
 freeAtomsQT :: M.Map Ident Type -> QualifiedType -> QualifiedType
 freeAtomsQT m (ForAll vars tt) =
   let m' = foldr (M.delete) m vars in
@@ -313,13 +312,16 @@ freeAtomsQT m (ForAll vars tt) =
 
 freeAtomsD :: M.Map Ident Type -> Declaration -> Declaration
 freeAtomsD m (Function name args maytype body) = Function name args (freeAtomsQT m <$> maytype) (freeAtomsE m body)
-freeAtomsD _ (DataType _ _ _) = error "TODO"
+freeAtomsD m (DataType name argtypes cases) = DataType name argtypes (map freeCase cases)
+  where
+    m' = foldr (M.delete) m argtypes
+    freeCase (DataTypeCase cname types) = DataTypeCase cname (map (substituteAtoms m') types)
 
 freeAtomsE :: M.Map Ident Type -> Exp -> Exp
 freeAtomsE m (EApplication a b) = EApplication (freeAtomsE m a) (freeAtomsE m b)
 freeAtomsE m (ELambda x e) = ELambda x (freeAtomsE m e)
-freeAtomsE m (ECaseOf e cases) = ECaseOf (freeAtomsE m e) (map freeAtomsCase cases) where
-  freeAtomsCase (ECase n args _) = ECase n args $ freeAtomsE m e
+freeAtomsE m (ECaseOf exp cases) = ECaseOf (freeAtomsE m exp) (map freeAtomsCase cases) where
+  freeAtomsCase (ECase n args e) = ECase n args $ freeAtomsE m e
 freeAtomsE m (EBlock decls e) = EBlock (map (freeAtomsD m) decls) (freeAtomsE m e)
 freeAtomsE _ v@(EVar _) = v
 freeAtomsE _ c@(EConst _) = c
