@@ -1,0 +1,106 @@
+def id[a](x: a):a = x;
+
+def const[a][b](a: a, b: b): a = a;
+
+def not(b: Bool): Bool = case b of {
+    | True -> False
+    | False -> True
+};
+
+def or(a: Bool, b: Bool): Bool = case a of {
+    | True -> True
+    | False -> b
+};
+
+def and(a: Bool, b: Bool): Bool = case a of {
+    | False -> False
+    | True -> b
+};
+
+def fst[a][b](t: Tuple2 a b): a = case t of {
+    | Tuple2 a b -> a
+};
+
+def snd[a][b](t: Tuple2 a b): b = case t of {
+    | Tuple2 a b -> b
+};
+
+defop !=[a](x: a, y: a): Bool = not (x == y);
+
+def compose[a][b][c](f: a -> b, g: b -> c): a -> c = \a -> g (f a);
+
+defop $[a][b](f: a -> b, x: a): b = f x;
+
+//data List a = Cons a * List a | Nil; // list is a builtin now, but it can also be defined like this, it's builtin only for the syntactic sugar to work
+data Maybe a = Just a | Nothing;
+
+def getOrElse[a](m: Maybe a, default: a): a = case m of {
+    | Just a -> a
+    | Nothing -> default
+};
+
+def head[a](l: List a): Maybe a = case l of {
+    | Cons h t -> Just h
+    | Nil -> Nothing
+};
+
+def unsafeTail[a](l: List a): List a = case l of {
+    | Cons h t -> t
+    | Nil -> error "Empty list"
+};
+
+def length[a](l: List a): Int = case l of {
+    | Nil -> 0
+    | Cons x tail -> 1 + (length tail)
+};
+
+def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
+
+def map[a][b](f: a -> b, l: List a): List b = case l of {
+    | Nil -> Nil
+    | Cons h t -> Cons (f h) (map f t)
+};
+
+def append[a](l1: List a, l2: List a): List a = case l1 of {
+    | Nil -> l2
+    | Cons h t -> Cons h (append t l2)
+};
+
+defop <++>[a](l1: List a, l2: List a): List a = Prelude.append l1 l2;
+
+def flatten[a](l: List (List a)): List a = case l of {
+    | Nil -> Nil
+    | Cons l1 t -> append l1 (flatten t)
+};
+
+def foldLeft[a][b](f: b -> a -> b, z: b, l: List a): b = case l of {
+    | Nil -> z
+    | Cons h t -> foldLeft f (f z h) t
+};
+
+def foldRight[a][b](f: a -> b -> b, z: b, l: List a): b = case l of {
+    | Nil -> z
+    | Cons h t ->  f h (foldRight f z t)
+};
+
+def fold[a](f: a -> a -> a, z: a, l: List a): a = foldLeft f z l;
+
+def flip[a][b][c](f: a -> b -> c): b -> a -> c = \b -> (\a -> (f a b));
+
+def reverse[a](l: List a): List a = foldLeft (flip Cons) [] l;
+
+def flatMap[a][b](f: a -> List b, l: List a): List b = flatten (map f l);
+
+data Either e a = Left e | Right a;
+
+/*
+  This can be used to implement recursion with lambdas, for example:
+  val fact: Int -> Int = fix (\rec -> (\n -> if n == 0 then 1 else (n * (rec (n-1)))));
+  fact 5 == 120
+*/
+def fix[a](F: a -> a): a = {
+    val x: a = F x;
+    x
+};
+
+data Tree a = Node a * (Tree a) * (Tree a) | Leaf;

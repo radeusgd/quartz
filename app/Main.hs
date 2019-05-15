@@ -83,7 +83,7 @@ handleErrorByFailing :: MonadIO m => ExceptT String m a -> m a
 handleErrorByFailing m = do
   r <- runExceptT m
   case r of
-    Left err -> liftIO $ print err >> exitFailure
+    Left err -> liftIO $ putStrLn err >> exitFailure
     Right a -> return a
 
 runImportAndMain :: FilePath -> StateT RState IO ()

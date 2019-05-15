@@ -1,0 +1,14 @@
+def block(a: Int, b: Int): String = {
+    val c: Int = a + b;
+    val d: String = {
+        val x: String = "a";
+        val y: String = "b";
+        x <+> y
+    };
+    val willNotBeEvaluated = error "FAIL";
+    def go(x: Int): Int = c * x;
+    val z = go a;
+    d <+> "; " <+> (toString z)
+};
+
+def main(): IO () = print (block 5 5);

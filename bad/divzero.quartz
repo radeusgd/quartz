@@ -1,0 +1,3 @@
+import Prelude;
+
+def main(): IO () = print $ toString $ 1 / 0;

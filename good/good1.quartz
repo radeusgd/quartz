@@ -1,0 +1,9 @@
+def a(): Int = 10;
+
+def dec(a: Int, b: Int): Int = 10 * a + b; // test
+
+/*
+aaa
+*/
+
+def main(): IO () = print (toString (dec 4 2));
