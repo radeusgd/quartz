@@ -44,14 +44,3 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - quartzlang
-
-# tests:
-#   quartzlang-test:
-#     main:                Spec.hs
-#     source-dirs:         test
-#     ghc-options:
-#     - -threaded
-#     - -rtsopts
-#     - -with-rtsopts=-N
-#     dependencies:
-#     - quartzlang
