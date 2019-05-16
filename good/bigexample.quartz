@@ -7,7 +7,7 @@ def echo(): IO () = readLine >>= (\line -> (print line));
 // recursive definitions are allowed, but full type signature is required
 def fact(n: Int): Int = if (n == 0)
     then 1
-    else n * (fact (n - 1));
+    else (n * (fact (n - 1)));
 
 def block(a: Int, b: Int): String = {
     // let-blocks with type reconstruction

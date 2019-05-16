@@ -29,8 +29,14 @@ The not-qualified identifer first looks at the local scope (arguments of functio
 
 ### Building
 It is best to just run `stack install` and use `quartzlang-exe` as an entry point.
+Alternatively you can use `make` which should put `interpreter` executable in the root project directory (works only on students).
 
 To get rid of an environment variable warning, you should set `QUARTZ_LIBRARY_PATH` to the absolute path of `stdlib` from this repository, this way you can run the interpreter from any directory. If the variable is not set, the warning will be printed and running the interpreter from outside of the projects root directory will result in an error.
+
+You may just run in the root directory:
+```
+export QUARTZ_LIBRARY_PATH=$(pwd)/stdlib
+```
 
 The interpreter has following modes:
  - interpret a file - just pass the file as its first and only argument and it will be runCheck
@@ -41,10 +47,14 @@ The interpreter has following modes:
 ### Examples
 In `bad` directory there are examples of syntax, type and runtime errors.
 In `good` directory:
- - `bigexample.quartz` demonstrates most constructs of the language in some random ways
+ - `bigexample.quartz` demonstrates most constructs of the language in some random ways, warning: it's interactive (you need to write 3 lines into stdin)
  - `bst.quartz` shows usage of a binary search tree implementation
  - `fuel.quartz` shows instruction counting capabilities of the language
+ - `io.quartz` demonstrates do-notation and some higher order functions working with IO (mapM)
 Besides these, lots of interesting constructs can be found in `stdlib` where `Prelude` defines lots of higher order functions known from Haskell and `BST` defines the functions that are used in the BST example.
+
+### Editor support
+In `support/` directory there's an experimental version of a Spacemacs layer that may be used for syntax highlighting of the language (it auto-detects .quartz extension).
 
 ## Ocenianie
 Komentarz odnośnie oceniania:

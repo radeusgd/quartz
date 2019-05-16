@@ -27,7 +27,7 @@
 (setq quartz-font-lock-keywords
       (let* (
             ;; define several category of keywords
-            (x-keywords '("def" "defop" "if" "then" "else" "case" "of" "return" "val" "data", "do", "import"))
+            (x-keywords '("def" "defop" "if" "then" "else" "case" "of" "return" "val" "data" "do" "import"))
 
             ;; generate regex string for each category of keywords
             (x-keywords-regexp (regexp-opt x-keywords 'words))

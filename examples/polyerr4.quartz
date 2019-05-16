@@ -1,4 +1,0 @@
-def idinterr[a](x: a): a = {
-    val f = \v -> v + 1;
-    f x
-};

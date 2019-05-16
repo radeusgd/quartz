@@ -1,0 +1,11 @@
+import Prelude;
+
+def askForLine(question: String): IO String = do {
+    print $ question <+> ": ";
+    readLine
+};
+
+def main(): IO () = do {
+    lines <- mapM askForLine ["1", "2", "3rd", "fourth"];
+    mapM_ print lines
+};
