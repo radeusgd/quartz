@@ -9,19 +9,18 @@ import Control.Monad.Except
 
 import Quartz.Syntax.ErrM
 
-import Passes.Desugar
 import AST.Desugared
 import Runtime
-
+import Linker
 import Builtins
 import Passes.TypeCheck
 
 import Repl
 import AppCommon
 
-handleSyntaxError :: Err a -> IO a
-handleSyntaxError (Bad err) = putStrLn ("Syntax error: " ++ err) >> exitFailure
-handleSyntaxError (Ok a) = return a
+handleSyntaxError :: String -> Err a -> IO a
+handleSyntaxError filename (Bad err) = putStrLn (filename ++ " Syntax error: " ++ err) >> exitFailure
+handleSyntaxError _ (Ok a) = return a
 
 groupEithers :: [Either e a] -> ([e], [a])
 groupEithers [] = ([], [])
@@ -36,28 +35,33 @@ collectSuccessOrPrintErrors printer lst =
   if null es then return as
   else mapM_ printer es >> exitFailure
 
-typeCheck :: String -> [Declaration] -> IO [Declaration]
-typeCheck mod decls = do
-  builtinTypes <- loadBuiltinDecls
-  let tcres = evalInfer $ withTopLevelDecls (Just mod) builtinTypes $ (typeCheckTopLevel (Just mod) decls)
-  case tcres of
-    Left err -> printTypeError err >> exitFailure
-    Right () -> return decls
-  where
-    printTypeError e = putStrLn $ "Type error: " ++ show e
-
 runCheck :: String -> IO ()
 runCheck fname = do
-  parsed <- parseFile' fname
-  (imports, decls) <- handleSyntaxError parsed
-  -- TODO imports
-  let desugared = map desugarDeclaration decls
-  _ <- typeCheck (moduleName fname) desugared
-  exitSuccess
+  builtins <- loadBuiltinDecls
+  case evalInfer $ extendEnvironment (Just builtinsModuleName) emptyTypeEnv builtins of
+    Left err -> printTypeError "[Builtins]" err >> exitFailure
+    Right initialEnv -> do
+      parsed <- parseFile fname
+      (imports, decls) <- handleSyntaxError fname parsed
+      paths <- mapM (handleErrorByFailing . findModule) imports
+      env <- foldM loadSigsFromModule initialEnv paths
+      -- _ <- typeCheck (moduleName fname) desugared
+      case evalInfer $ withEnvironment env $ typeCheckTopLevel (Just $ moduleName fname) decls of
+        Left err -> printTypeError fname err >> exitFailure
+        Right () -> exitSuccess
+  where
+    printTypeError path e = putStrLn $ path ++ " Type error: " ++ show e
+    loadSigsFromModule :: TypeEnv -> String -> IO TypeEnv
+    loadSigsFromModule env path = do
+      parsed <- parseFile path
+      (_, decls) <- handleSyntaxError path parsed
+      case evalInfer $ withEnvironment env $ withTopLevelDecls (Just $ moduleName path) decls $ fetchCurrentEnvironment of
+        Left err -> putStrLn "Unexpected error:" >> printTypeError path err >> exitFailure
+        Right env' -> return env'
 
 runExtract :: String -> IO ()
 runExtract fname = do
-  (imports, decls) <- parseFile fname >>= handleSyntaxError
+  (imports, decls) <- parseFile fname >>= handleSyntaxError fname
   mapM_ printImport imports
   mapM_ printSignature decls
   exitSuccess
@@ -89,8 +93,8 @@ handleErrorByFailing m = do
 runImportAndMain :: FilePath -> StateT RState IO ()
 runImportAndMain path = do
   handleErrorByFailing $ introduceModule path
-  te <- gets rsTypeEnv
-  _ <- handleErrorByFailing $ showExp (EVar $ IDefault "main") -- TODO typecheck that main exists and has proper signature
+  -- we create a block enforcing main's type to unify with IO ()
+  _ <- handleErrorByFailing $ showExp (EBlock [Function "entryPoint" [] (Just $ ForAll [] (Construction (Atom $ IDefault "IO") (Atom $ IDefault "()"))) $ EVar $ IDefault "main"] (EVar $ IDefault "entryPoint"))
   return ()
 
 runRun :: String -> IO ()
@@ -104,8 +108,8 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    ["repl"] -> runRepl
-    ["check", fname] -> runCheck fname
-    ["extract", fname] -> runExtract fname
-    ["run", fname] -> runRun fname
-    _ -> putStrLn "TODO usage"
+    ["--repl"] -> runRepl
+    ["--check", fname] -> runCheck fname
+    ["--extract", fname] -> runExtract fname
+    [fname] -> runRun fname
+    _ -> putStrLn "Possbile argument combinations: --repl | --check fname | --extract fname | fname\n Providing just a filename executes this file, check runs a typecheck of the file (but not its dependencies), extract prints all symbols and imports defined in the file, repl launches an interactive session."

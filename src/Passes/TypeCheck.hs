@@ -9,7 +9,8 @@ module Passes.TypeCheck(
   withEnvironment,
   TypeEnv,
   emptyTypeEnv,
-  inContext
+  inContext,
+  fetchCurrentEnvironment
                        ) where
 import Prelude hiding (mod, exp)
 import Control.Monad.Reader
@@ -75,11 +76,6 @@ extendContext c = local (\e -> e { eCtx = c ++ " in " ++ eCtx e })
 
 emptyTcState :: TcState
 emptyTcState = TcState 0
-
--- traceEnv :: TCM ()
--- traceEnv = do
---   env <- asks eBindings
---   trace ("[ENV] " ++ show env) $ return ()
 
 readVar' :: QualifiedIdent -> TCM QualifiedType
 readVar' v = do
@@ -410,7 +406,10 @@ typeCheckTopLevel mod decls =
 extendEnvironment :: Maybe Ident -> TypeEnv -> [Declaration] -> TCM TypeEnv
 extendEnvironment mod e decls = do
   typeCheckTopLevel mod decls
-  withEnvironment e $ withTopLevelDecls mod decls $ asks eBindings
+  withEnvironment e $ withTopLevelDecls mod decls $ fetchCurrentEnvironment
 
 withEnvironment :: TypeEnv -> TCM a -> TCM a
 withEnvironment te = local (\_ -> Env te "???" Set.empty)
+
+fetchCurrentEnvironment :: TCM TypeEnv
+fetchCurrentEnvironment = asks eBindings

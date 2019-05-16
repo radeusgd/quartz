@@ -1,0 +1,18 @@
+import Prelude;
+import BST;
+
+val t1: Tree Int = BST.fromList [10,1,2,];
+
+def depth2[a](tree: Tree a): Int = BST.foldTree (\l -> (\v -> (\r -> 1 + (max l r)))) 0 tree;
+
+val examples: List String = [
+                toString $ t1,
+                "Depth: " <+> toString $ BST.depth t1,
+                "Depth (fold): " <+> toString $ depth2 t1,
+                "Sorted: " <+> toString $ (BST.toList <> BST.fromList) [5,4,3,1,2,0,10,1,2,1],
+                "Insert: " <+> toString $ BST.insert t1 100,
+                "Sum: " <+> toString $ BST.sum t1,
+                "As string: " <+> toString $ BST.mapTree toString t1
+];
+
+def main(): IO () = mapM_ print examples;

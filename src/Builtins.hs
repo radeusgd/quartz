@@ -14,6 +14,7 @@ import Control.Monad.Except
 import AST.Desugared
 import Passes.Desugar
 import System.IO
+import System.IO.Error
 import Interpreter
 import Linker
 import Constants
@@ -132,7 +133,7 @@ builtins = [
   ("error", VFunction "msg" emptyEnv $ do (VStr msg) <- readVar $ IDefault "msg"; throwError msg),
   ("toString", make1ArgFunLazy $ \v -> do s <- ishow JustShow v; makeLazy $ return $ VStr s),
   ("print", make1ArgFun $ \(VStr msg) -> VIO (makeLazy $ do liftIO $ putStrLn msg; return $ VUnit)),
-  ("readLine", VIO (makeLazy $ VStr <$> (liftIO getLine))),
+  ("readLine", readLine),
   (">>=", make2ArgFunLazy sequenceIO),
   (">>", make2ArgFunLazy sequenceIODiscard),
   ("return", make1ArgFunLazy $ \v -> makeLazy $ return $ VIO (return v)),
@@ -174,6 +175,13 @@ builtins = [
     res <- force lval
     end <- gets usedFuel
     return $ VDataType "Tuple2" [res, VInt $ fromIntegral (end - start)]
+  readLine :: Value
+  readLine = VIO (makeLazy $ do
+                     r <- liftIO $ catchIOError (Right <$> getLine) (\err -> return $ Left $ show err)
+                     case r of
+                       Left err -> throwError err
+                       Right res -> return $ VStr res
+                     )
 
 -- def print(msg: String): IO () = ???;
 -- def readLine() : IO String = ???;

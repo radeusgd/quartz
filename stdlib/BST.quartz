@@ -1,0 +1,44 @@
+import Prelude;
+
+data Tree a = Node (Tree a) * a * (Tree a) | Leaf;
+
+def insert(tree: Tree Int, elem: Int): Tree Int = case tree of {
+    | Node l v r -> if (elem < v) then (Node (insert l elem) v r)
+        else (Node l v (insert r elem))
+    | Leaf -> Node Leaf elem Leaf
+};
+
+def contains(tree: Tree Int, elem: Int): Bool = case tree of {
+    | Node l v r -> if (elem == v) then True
+        else if (elem < v) then (contains l v)
+        else (contains r v)
+    | Leaf -> False
+};
+
+def fromList(l: List Int): Tree Int = foldLeft insert Leaf l;
+
+def toList[a](tree: Tree a): List a = case tree of {
+    | Node l v r -> (toList l) <++> [v] <++> (toList r)
+    | Leaf -> []
+};
+
+def depth[a](tree: Tree a): Int = case tree of {
+    | Leaf -> 0
+    | Node l v r -> 1 + (max (depth l) (depth r))
+};
+
+def mapTree[a][b](f: a -> b, tree: Tree a): Tree b = case tree of {
+    | Leaf -> Leaf
+    | Node l v r -> Node (mapTree f l) (f v) (mapTree f r)
+};
+
+def foldTree[a][b](f: b -> a -> b -> b, leaf: b, tree: Tree a): b = case tree of {
+    | Leaf -> leaf
+    | Node l v r -> {
+        val lb = foldTree f leaf l;
+        val rb = foldTree f leaf r;
+        f lb v rb
+    }
+};
+
+def sum(tree: Tree Int): Int = foldTree (\l -> \v -> \r -> l + v + r) 0 tree;

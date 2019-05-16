@@ -27,7 +27,12 @@ def snd[a][b](t: Tuple2 a b): b = case t of {
 
 defop !=[a](x: a, y: a): Bool = not (x == y);
 
+def max(x: Int, y: Int): Int = if (x > y) then x else y;
+def min(x: Int, y: Int): Int = if (x < y) then x else y;
+
 def compose[a][b][c](f: a -> b, g: b -> c): a -> c = \a -> g (f a);
+
+defop <>[a][b][c](f: b -> c, g: a -> b): a -> c = compose g f;
 
 defop $[a][b](f: a -> b, x: a): b = f x;
 
@@ -103,4 +108,18 @@ def fix[a](F: a -> a): a = {
     x
 };
 
-data Tree a = Node a * (Tree a) * (Tree a) | Leaf;
+//currently monads are not generalized because of lack of typeclasses, so all functions operate on IO a
+def mapM[a][b](f: a -> IO b, l: List a): IO (List b) = case l of {
+    | Nil -> return Nil
+    | Cons h t -> do {
+        h1 <- f h;
+        t1 <- mapM f t;
+        return $ Cons h1 t1
+    }
+};
+
+def mapM_[a](f: a -> IO (), l: List a): IO () = mapM f l >> return ();
+
+def sequence[a](l: List (IO a)): IO (List a) = mapM id l;
+
+def sequence_[a](l: List (IO ())): IO () = mapM_ id l;

@@ -32,7 +32,7 @@ handleError :: FailableRepl () -> Repl ()
 handleError m = do
   r <- runExceptT m
   case r of
-    Left e -> liftIO $ print e
+    Left e -> liftIO $ putStrLn e
     Right () -> return ()
 
 parse :: ([Lex.Token] -> ParErr.Err a) -> String -> Either String a
