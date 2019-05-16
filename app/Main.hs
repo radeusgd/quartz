@@ -3,6 +3,7 @@ module Main where
 
 import Prelude hiding(mod)
 import System.Environment
+import System.IO
 import System.Exit ( exitFailure, exitSuccess )
 import Control.Monad.State
 import Control.Monad.Except
@@ -18,8 +19,11 @@ import Passes.TypeCheck
 import Repl
 import AppCommon
 
+putStdErr :: String -> IO ()
+putStdErr = hPutStrLn stderr
+
 handleSyntaxError :: String -> Err a -> IO a
-handleSyntaxError filename (Bad err) = putStrLn (filename ++ " Syntax error: " ++ err) >> exitFailure
+handleSyntaxError filename (Bad err) = putStdErr (filename ++ " Syntax error: " ++ err) >> exitFailure
 handleSyntaxError _ (Ok a) = return a
 
 groupEithers :: [Either e a] -> ([e], [a])
@@ -50,13 +54,13 @@ runCheck fname = do
         Left err -> printTypeError fname err >> exitFailure
         Right () -> exitSuccess
   where
-    printTypeError path e = putStrLn $ path ++ " Type error: " ++ show e
+    printTypeError path e = putStdErr $ path ++ " Type error: " ++ show e
     loadSigsFromModule :: TypeEnv -> String -> IO TypeEnv
     loadSigsFromModule env path = do
       parsed <- parseFile path
       (_, decls) <- handleSyntaxError path parsed
       case evalInfer $ withEnvironment env $ withTopLevelDecls (Just $ moduleName path) decls $ fetchCurrentEnvironment of
-        Left err -> putStrLn "Unexpected error:" >> printTypeError path err >> exitFailure
+        Left err -> putStdErr "Unexpected error:" >> printTypeError path err >> exitFailure
         Right env' -> return env'
 
 runExtract :: String -> IO ()
@@ -67,7 +71,7 @@ runExtract fname = do
   exitSuccess
   where
     printImport :: String -> IO ()
-    printImport i = putStrLn $ "import " ++ i
+    printImport i = putStdErr $ "import " ++ i
     printSignature :: Declaration -> IO ()
     printSignature (Function name args ttype _) = putStrLn sig where
       sig = name ++ "(" ++ printArgs args ++ ")" ++ ": " ++ maybe "???" show ttype
@@ -87,7 +91,7 @@ handleErrorByFailing :: MonadIO m => ExceptT String m a -> m a
 handleErrorByFailing m = do
   r <- runExceptT m
   case r of
-    Left err -> liftIO $ putStrLn err >> exitFailure
+    Left err -> liftIO $ putStdErr err >> exitFailure
     Right a -> return a
 
 runImportAndMain :: FilePath -> StateT RState IO ()
@@ -101,7 +105,7 @@ runRun :: String -> IO ()
 runRun fname = do
   i <- runExceptT makeInitialState
   case i of
-    Left err -> (putStrLn $ "Error initializing the runtime: " ++ err) >> exitFailure
+    Left err -> (putStdErr $ "Error initializing the runtime: " ++ err) >> exitFailure
     Right initState -> evalStateT (runImportAndMain fname) initState >> exitSuccess
 
 main :: IO ()

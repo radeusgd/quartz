@@ -18,6 +18,7 @@ import Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 
 import System.Console.Repline
 import System.Exit ( exitSuccess, exitFailure )
+import System.IO
 import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Except
@@ -32,7 +33,7 @@ handleError :: FailableRepl () -> Repl ()
 handleError m = do
   r <- runExceptT m
   case r of
-    Left e -> liftIO $ putStrLn e
+    Left e -> liftIO $ hPutStrLn stderr e
     Right () -> return ()
 
 parse :: ([Lex.Token] -> ParErr.Err a) -> String -> Either String a
@@ -80,7 +81,7 @@ runImport mod = do
 cmd :: String -> Repl ()
 cmd input = handleError $ do
   case parseLine input of
-    PError err -> liftIO $ putStrLn $ "Parse error: " ++ err
+    PError err -> liftIO $ hPutStrLn stderr $ "Parse error: " ++ err
     PDecl decl -> runDecl decl
     PExp exp -> runExp exp
     PImport mod -> runImport mod
@@ -106,11 +107,11 @@ typeof :: [String] -> Repl ()
 typeof args = do
   tenv <- gets rsTypeEnv
   case parseExp (unwords args) of
-    Left err -> liftIO $ putStrLn $ "Error: " ++ err
+    Left err -> liftIO $ hPutStrLn stderr $ "Error: " ++ err
     Right exp ->
       case showingError $ inferType $ withEnvironment tenv $ inferE exp of
-        Left err -> liftIO $ putStrLn $ "Error: " ++ err
-        Right t -> liftIO $ putStrLn $ "Type of " ++ show exp ++ " is " ++ show t
+        Left err -> liftIO $ hPutStrLn stderr $ "Error: " ++ err
+        Right t -> liftIO $ hPutStrLn stderr $ "Type of " ++ show exp ++ " is " ++ show t
 
 inspectMemory :: [String] -> Repl ()
 inspectMemory [arg] = do
@@ -128,7 +129,7 @@ loadFile :: [String] -> FailableRepl ()
 loadFile args = do
   parsed <- liftIO $ parseFile (unwords args)
   case parsed of
-    ParErr.Bad e -> liftIO $ putStrLn $ "Syntax error: " ++ e
+    ParErr.Bad e -> liftIO $ hPutStrLn stderr $ "Syntax error: " ++ e
     ParErr.Ok (imports, decls) -> do
       mapM_ runImport imports
       mapM_ runDecl decls
@@ -140,7 +141,7 @@ options = [
     ("load", handleError . loadFile),
     ("inspectMemory", inspectMemory),
     ("parseExp", \args -> let s = unwords args in case parseExp s of
-        Left err -> liftIO $ putStrLn $ "Parse error: " ++ err
+        Left err -> liftIO $ hPutStrLn stderr $ "Parse error: " ++ err
         Right tree -> liftIO $ (PrettyText.putDoc $ Pretty.pretty tree) >> putStrLn ""
     )
   ]
@@ -155,6 +156,6 @@ runRepl :: IO ()
 runRepl = do
   initialState <- runExceptT makeInitialState
   case initialState of
-    Left err -> (putStrLn $ "Error initializing REPL: " ++ err) >> exitFailure
+    Left err -> (hPutStrLn stderr $ "Error initializing REPL: " ++ err) >> exitFailure
     Right initState -> do
       evalStateT (evalRepl "$> " cmd options completer ini) initState
