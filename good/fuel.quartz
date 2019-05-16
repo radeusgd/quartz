@@ -1,0 +1,23 @@
+/*
+  This file shows the instruction counting / limitting capabilities of the language.
+  One instruction = one function application.
+ */
+
+import Prelude;
+
+def fact(n: Int): Int = if (n == 0)
+    then 1
+    else (n * (fact (n - 1)));
+
+val f5: Int = fact 5;
+
+def infiniteRec(x: Int): Int = 1 + (infiniteRec x);
+
+val examples: List String = [
+                             // countInstructions returns a tuple (result, instruction count)
+                             toString $ countInstructions f5,
+                             "Lazy eval makes the second invokation faster: " <+> toString $ countInstructions f5,
+                             toString $ limit 100 (infiniteRec 0) // limit will break out of infinite recursion
+                             ];
+
+def main(): IO () = mapM_ print examples;

@@ -6,7 +6,7 @@ The grammar is defined in separate file: `grammar.pdf`
 
 ## Language
 Quartz is a functional language featuring:
-- static type system with basic inference (although recursive types have to be specified as well as top-level types, so that each exported function is documented with a proper type signature)
+- static type system with basic inference (although recursive types have to be specified as well as top-level types, so that each exported function is documented with a proper type signature, but when using local definition blocks, type signatures may be omitted and the types will be inferred)
 - polymorphism
 - lazy evaluation (for example `if` is defined as a function inside the language)
 - custom polymorphic, recursive datatypes (`List a`, `Maybe a` are defined inside the language)
@@ -27,9 +27,24 @@ Each identifier may be qualified or not.
 The qualified identifier just uses the symbol from the module it belongs to (the module has to have been imported somewhere in the same file though).
 The not-qualified identifer first looks at the local scope (arguments of functions / lambdas we are in, local definitions and later definitions from current module with classic shadowing rules) and if the identifier is not found there, all modules that have been imported in the current file are searched for such a identifier; if exactly one of them matches, it is used, if multiple ones match a "ambiguous reference" error is raised telling the user to use the full name - thus the order of modules imported is not important as only identifiers appearing in a single module can be used without a qualifier.
 
-### Examples
-`example.quartz` is a program in the language showcasing most of its features.
+### Building
+It is best to just run `stack install` and use `quartzlang-exe` as an entry point.
 
+To get rid of an environment variable warning, you should set `QUARTZ_LIBRARY_PATH` to the absolute path of `stdlib` from this repository, this way you can run the interpreter from any directory. If the variable is not set, the warning will be printed and running the interpreter from outside of the projects root directory will result in an error.
+
+The interpreter has following modes:
+ - interpret a file - just pass the file as its first and only argument and it will be runCheck
+ - typecheck `interpreter --check filename`, will print any errors and return 0 on success, checks types only in local file, but syntax errors from other modules may appear
+ - extract `intepreter --extract filename`, will print signatures of all methods defined in the module and what other modules it imports. It can be used to implement a simple autocompletions system
+ - REPL `interpreter --repl`, launches a Read-Eval-Print-Loop that is a very comfortable way to test the language, it has builtin commands like `:t expression` that doesn't evaluate the expression but prints its inferred type
+
+### Examples
+In `bad` directory there are examples of syntax, type and runtime errors.
+In `good` directory:
+ - `bigexample.quartz` demonstrates most constructs of the language in some random ways
+ - `bst.quartz` shows usage of a binary search tree implementation
+ - `fuel.quartz` shows instruction counting capabilities of the language
+Besides these, lots of interesting constructs can be found in `stdlib` where `Prelude` defines lots of higher order functions known from Haskell and `BST` defines the functions that are used in the BST example.
 
 ## Ocenianie
 Komentarz odnośnie oceniania:

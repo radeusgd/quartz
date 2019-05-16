@@ -1,0 +1,6 @@
+// seq works like in Haskell
+val err: a = error "Undefined - fail at runtime";
+
+val x: Int = seq err 3;
+
+def main(): IO () = print (toString x);

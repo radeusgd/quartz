@@ -64,18 +64,3 @@ def main(): IO () = do {
     echo;
     twolines
 };
-
-/*
-  Used builtins:
-  + : Int -> Int -> Int
-  * : Int -> Int -> Int
-  <+> : String -> String -> String
-  if_then_else : Forall a. Bool -> a -> a -> a
-  print : String -> IO ()
-  readLine : IO String
-  >> : Forall a,b. IO a -> IO b -> IO b
-  >>= : Forall a,b. IO a -> (a -> IO b) -> IO b
-  ??? : Forall a. a
-  error : Forall a. String -> a
-  limit : Forall a. Int -> a -> Maybe a
-*/
