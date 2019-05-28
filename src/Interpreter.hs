@@ -21,7 +21,7 @@ data Value
   | VUnit
   -- function: argname, definition_environemnt (my closure), computation
   | VFunction String Env (Interpreter LazyValue)
-  | VDataType Ident [Value] -- right now datatypes are strict (so forcing an instance of a datatpye forces all of it's arguments), this disallows infinite lists for example -- TODO change this to Loc
+  | VDataType Ident [Loc] -- right now datatypes are strict (so forcing an instance of a datatpye forces all of it's arguments), this disallows infinite lists for example -- TODO change this to Loc
   | VIO (Interpreter LazyValue) -- it was prettier when we didn't have IO in interpreter and put it only here but this seems to be easier
 
 instance Show Value where
@@ -30,18 +30,9 @@ instance Show Value where
   show (VDouble d) = show d
   show (VUnit) = "()"
   show (VFunction arg _ _) = "λ" ++ arg ++ ". [function body]"
-  show d@(VDataType caseName args) = case caseName of
-    "Cons" -> show $ unpackList d
-    "Nil" -> "[]"
-    _ -> caseName ++ case args of
-      [] -> ""
-      _ -> show args
   show (VIO _) = "IO ???"
+  show (VDataType name vs) = name ++ "%% "++ show vs ++ "%%" -- these percentages mean it's locs
 
-unpackList :: Value -> [Value]
-unpackList (VDataType "Cons" [v, t]) = v : unpackList t
-unpackList (VDataType "Nil" []) = []
-unpackList _ = error "Malformed list represtantation"
 
 
 data ShowMode = RunIO | JustShow
@@ -50,7 +41,23 @@ class IShow a where
   ishow :: ShowMode -> a -> Interpreter String
 
 instance IShow Value where
-  -- ishow _ (VDataType caseName args) = return $ caseName ++ show args -- TODO when changing to lazy datatypes change this
+  ishow showmode d@(VDataType caseName args) = case caseName of -- TODO do I want to inherit showmode? should a function returning Just IO be evaluated? probably yes
+    "Cons" -> unpackList d >>= ishow showmode
+    "Nil" -> return "[]"
+    _ -> do
+      args' <- mapM (forceThunk >=> ishow showmode) args
+      return $ caseName ++ case args' of
+          [] -> ""
+          _ -> "[" ++ intercalate "," args' ++ "]"
+    where
+      unpackList :: Value -> Interpreter [Value]
+      unpackList (VDataType "Cons" [v, t]) = do
+        v' <- forceThunk v
+        t' <- forceThunk t
+        t'' <- unpackList t'
+        return $ v' : t''
+      unpackList (VDataType "Nil" []) = return []
+      unpackList _ = error "Malformed list represtantation"
   ishow RunIO (VIO computation) = do
     res <- computation
     ishow RunIO res
@@ -58,6 +65,11 @@ instance IShow Value where
 
 instance IShow LazyValue where
   ishow mode = force >=> ishow mode
+
+instance IShow a => IShow [a] where
+  ishow mode lst = do
+    elems <- mapM (ishow mode) lst
+    return $ "[" ++ intercalate "," elems ++ "]"
 
 type ErrorType = String
 
@@ -158,7 +170,14 @@ readThunk v = do
 
 readVar :: QualifiedIdent -> Interpreter Value
 readVar v = do
-  (loc, thunk) <- readThunk v
+  (loc, _) <- readThunk v
+  forceThunk loc
+
+forceThunk :: Loc -> Interpreter Value
+forceThunk loc = do
+  mem <- gets thunks
+  let valM = M.lookup loc mem
+  thunk <- getJustOrError ("Memory location " ++ show loc ++ " is read from, but hasn't been allocated. This shouldn't happen") valM
   case thunk of
     ThunkComputed val -> return val
     ThunkLazy lv -> do
@@ -199,6 +218,9 @@ makeLazy :: Interpreter Value -> Interpreter LazyValue
 makeLazy i = do
   env <- ask
   return $ Lazy env i
+
+makeLazyValue :: Value -> LazyValue
+makeLazyValue v = Lazy (emptyEnv) (return v)
 
 buildNArgFunction :: Int -> ([LazyValue] -> Interpreter LazyValue) -> Interpreter LazyValue
 buildNArgFunction 0 builder = builder []
@@ -251,10 +273,17 @@ setDefinitionValue locations (DataType _ _ cases) = do
     defineCase (DataTypeCase caseName argtypes, loc) = do
       constructor <- buildNArgFunction (length argtypes) (constructDataTypeInstance caseName)
       setValue loc constructor
-    constructDataTypeInstance :: Ident -> [LazyValue] -> Interpreter LazyValue
-    constructDataTypeInstance caseName args = makeLazy $ do
-      args' <- mapM force args
-      return $ VDataType caseName args'
+
+constructDataTypeInstance :: Ident -> [LazyValue] -> Interpreter LazyValue
+constructDataTypeInstance caseName args = makeLazy $ do
+  args' <- mapM saveLazyThunk args
+  return $ VDataType caseName args'
+
+saveLazyThunk :: LazyValue -> Interpreter Loc
+saveLazyThunk lv = do
+  loc <- alloc
+  setValue loc lv
+  return loc
 
 interpret :: Exp -> Interpreter LazyValue
 interpret (EConst  c) = makeLazy $ fromLiteral c
@@ -279,7 +308,7 @@ interpret (ECaseOf exp cases) = do
       if name /= constructorName then matchCase constructorName dataargs t
       else if length dataargs /= length args then throwError "Datatype arguments count mismatch (data representation and case match have different number of arguments), shouldn't ever happen"
       else do
-        withValsEager (zip args dataargs) $ interpret e
+        withLocs (zip args dataargs) $ interpret e
 
 interpret (EApplication fun arg) = makeLazy $ do
   fun' <- interpret fun >>= force
@@ -307,6 +336,13 @@ withValEager name val m = do
   loc <- alloc
   setValueEager loc val
   local (bind (IDefault name) loc) m
+
+-- data is immutable so we can reuse already used locations to give them as arguments to other functions, because only thing that they can change is make them evaluated
+withLoc :: Ident -> Loc -> Interpreter a -> Interpreter a
+withLoc name loc m = local (bind (IDefault name) loc) m
+
+withLocs :: [(Ident, Loc)] -> Interpreter a -> Interpreter a
+withLocs lst m = List.foldr (uncurry withLoc) m lst
 
 runInterpreter :: Interpreter a -> IO (Either ErrorType a)
 runInterpreter i = do

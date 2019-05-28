@@ -84,18 +84,18 @@ make3ArgFun f = VFunction "z" emptyEnv $ do
 makeNothing :: Value
 makeNothing = VDataType "Nothing" []
 
-makeJust :: Value -> Value
-makeJust v = VDataType "Just" [v]
+makeJust :: LazyValue -> Interpreter LazyValue
+makeJust v = constructDataTypeInstance "Just" [v]
 
-makeMaybe :: Maybe Value -> Value
+makeMaybe :: Maybe LazyValue -> Interpreter LazyValue
 makeMaybe (Just v) = makeJust v
-makeMaybe (Nothing) = makeNothing
+makeMaybe (Nothing) = makeLazy $ return makeNothing
 
 makeNil :: Value
 makeNil = VDataType "Nil" []
 
-makeCons :: Value -> Value -> Value
-makeCons h t = VDataType "Cons" [h, t]
+makeCons :: LazyValue -> LazyValue -> Interpreter LazyValue
+makeCons h t = constructDataTypeInstance "Cons" [h, t]
 
 makeBool :: Bool -> Value
 makeBool True = VDataType "True" []
@@ -108,12 +108,12 @@ unpackBool other = error (show other ++ " is not a valid Boolean type")
 
 makeTupleN :: Integer -> Value
 makeTupleN n = go n [] where
-  go :: Integer -> [Value] -> Value
+  go :: Integer -> [Loc] -> Value
   go 0 vals = VDataType ("Tuple" ++ show n) $ reverse vals
   go k vals = if k < 0 then error "Negative tuple? Nonsense"
     else VFunction "x" emptyEnv $ do
-       x <- readVar $ IDefault "x"
-       makeLazy $ return $ go (k - 1) (x:vals)
+       (loc, _) <- readThunk $ IDefault "x"
+       makeLazy $ return $ go (k - 1) (loc:vals)
 
 builtins :: [(String, Value)]
 builtins = [
@@ -141,7 +141,7 @@ builtins = [
   ("countInstructions", make1ArgFunLazy countInstructions),
   ("seq", make2ArgFunLazy $ \a -> \b -> makeLazy $ do _ <- force a; force b),
   ("Nil", makeNil),
-  ("Cons", make2ArgFun makeCons),
+  ("Cons", make2ArgFunLazy makeCons),
   ("Tuple1", makeTupleN 1),
   ("Tuple2", makeTupleN 2),
   ("Tuple3", makeTupleN 3),
@@ -163,18 +163,18 @@ builtins = [
     (VIO ib) <- force b
     ib >>= force
   runWithLimit :: LazyValue -> LazyValue -> Interpreter LazyValue
-  runWithLimit llimit lval = makeLazy $ do
+  runWithLimit llimit lval = do -- make sure makeLazy is not needed here
     (VInt limit) <- force llimit
     -- traceShowM ("Will set limit to ", limit)
     result <- handleOutOfFuel $ withFuelLimit (fromInteger limit) (force lval)
     -- traceShowM ("Limit of ", limit, " has ended")
-    return $ makeMaybe result
+    (makeMaybe $ (makeLazyValue <$> result)) -- TODO force
   countInstructions :: LazyValue -> Interpreter LazyValue
-  countInstructions lval = makeLazy $ do
+  countInstructions lval = do -- and as above, makeLazy, likely not needed
     start <- gets usedFuel
     res <- force lval
     end <- gets usedFuel
-    return $ VDataType "Tuple2" [res, VInt $ fromIntegral (end - start)]
+    constructDataTypeInstance "Tuple2" [makeLazyValue $ res, makeLazyValue $ VInt $ fromIntegral (end - start)]
   readLine :: Value
   readLine = VIO (makeLazy $ do
                      r <- liftIO $ catchIOError (Right <$> getLine) (\err -> return $ Left $ show err)
@@ -191,9 +191,11 @@ compareValues :: Value -> Value -> Interpreter Bool
 (VStr a) `compareValues` (VStr b) = return $ a == b
 (VInt a) `compareValues` (VInt b) = return $ a == b
 (VDouble a) `compareValues` (VDouble b) = return $ a == b
-(VFunction _ _ _) `compareValues` _ = throwError "Cannot compare functions" -- TODO promote this to interpreter error instead of crash
+(VFunction _ _ _) `compareValues` _ = throwError "Cannot compare functions"
 VUnit `compareValues` VUnit = return True
 (VDataType constr1 args1) `compareValues` (VDataType constr2 args2) = do
-  argEqs <- mapM (uncurry compareValues) (zip args1 args2)
+  args1' <- mapM forceThunk args1
+  args2' <- mapM forceThunk args2
+  argEqs <- mapM (uncurry compareValues) (zip args1' args2')
   return $ constr1 == constr2 && length args1 == length args2 && all id argEqs
 _ `compareValues` _ = return False
