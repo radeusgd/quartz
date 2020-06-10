@@ -61,6 +61,24 @@ def length[a](l: List a): Int = case l of {
 
 def unsafeHead[a](l: List a): a = getOrElse (head l) (error "Empty list");
 
+def take[a](n: Int, l: List a): List a = if (n == 0) then Nil else case l of {
+    | Nil -> Nil
+    | Cons h t -> Cons h (take (n - 1) t)
+};
+
+def drop[a](n: Int, l: List a): List a = if (n == 0) then l else case l of {
+    | Nil -> Nil
+    | Cons h t -> drop (n - 1) t
+};
+
+// repeats the provided list infinitely many times
+def infiniteCycle[a](l: List a): List a = append l (infiniteCycle l);
+
+def nats(): List Int = {
+    def natsFrom(i: Int): List Int = Cons i (natsFrom (i + 1));
+    natsFrom 0
+};
+
 def map[a][b](f: a -> b, l: List a): List b = case l of {
     | Nil -> Nil
     | Cons h t -> Cons (f h) (map f t)

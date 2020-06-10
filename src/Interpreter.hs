@@ -68,8 +68,8 @@ instance IShow LazyValue where
 
 instance IShow a => IShow [a] where
   ishow mode lst = do
-    elems <- mapM (ishow mode) lst
-    return $ "[" ++ intercalate "," elems ++ "]"
+    es <- mapM (ishow mode) lst
+    return $ "[" ++ intercalate "," es ++ "]"
 
 type ErrorType = String
 
